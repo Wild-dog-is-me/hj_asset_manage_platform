@@ -1,6 +1,7 @@
 package com.ruoyi.manage.platform.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -25,6 +26,9 @@ public class InspectionRecordDetail
     private String fieldKey;
 
     private String fieldType;
+
+    @TableField(exist = false)
+    private String fieldOptions;
 
     private String fieldValue;
 
@@ -118,6 +122,16 @@ public class InspectionRecordDetail
     public void setFieldType(String fieldType)
     {
         this.fieldType = fieldType;
+    }
+
+    public String getFieldOptions()
+    {
+        return fieldOptions;
+    }
+
+    public void setFieldOptions(String fieldOptions)
+    {
+        this.fieldOptions = fieldOptions;
     }
 
     public String getFieldValue()

@@ -46,6 +46,9 @@
       <el-col :span="1.5">
         <el-button type="danger" plain icon="el-icon-delete" size="mini" :disabled="multiple" @click="handleDelete" v-hasPermi="['manage:inspection:record:remove']">删除</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button type="warning" plain icon="el-icon-download" size="mini" @click="handleExport" v-hasPermi="['manage:inspection:record:export']">导出</el-button>
+      </el-col>
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -132,11 +135,28 @@
         <el-button @click="cancel">取 消</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="导出点检记录" :visible.sync="exportOpen" width="480px" append-to-body>
+      <el-form ref="exportForm" :model="exportParams" label-width="100px">
+        <el-form-item label="开始日期" prop="beginDate">
+          <el-date-picker v-model="exportParams.beginDate" value-format="yyyy-MM-dd" type="date" placeholder="不选则不限制开始时间" clearable class="form-control" />
+        </el-form-item>
+        <el-form-item label="结束日期" prop="endDate">
+          <el-date-picker v-model="exportParams.endDate" value-format="yyyy-MM-dd" type="date" placeholder="不选则不限制结束时间" clearable class="form-control" />
+        </el-form-item>
+        <el-alert title="导出会生成一个 ZIP 包，每个记录包含一个 Word 文件" type="info" show-icon :closable="false" />
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" :loading="exportLoading" @click="confirmExport">确 定 导 出</el-button>
+        <el-button @click="exportOpen = false">取 消</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import { listInspectionRecord, getInspectionRecord, buildInspectionRecordTemplate, addInspectionRecord, updateInspectionRecord, delInspectionRecord } from "@/api/asset/inspection"
+import request from '@/utils/request'
 
 export default {
   name: "InspectionRecord",
@@ -151,6 +171,12 @@ export default {
       recordList: [],
       open: false,
       title: "",
+      exportOpen: false,
+      exportLoading: false,
+      exportParams: {
+        beginDate: undefined,
+        endDate: undefined
+      },
       queryParams: {
         pageNum: 1,
         pageSize: 10,
@@ -259,6 +285,50 @@ export default {
         return []
       }
       return options.split(',').filter(item => item)
+    },
+    handleExport() {
+      if (this.ids.length > 0) {
+        this.exportLoading = true
+        const params = { recordIds: this.ids.join(',') }
+        this.doExport(params)
+      } else {
+        this.exportParams.beginDate = undefined
+        this.exportParams.endDate = undefined
+        this.exportOpen = true
+      }
+    },
+    confirmExport() {
+      this.exportLoading = true
+      const params = {}
+      if (this.exportParams.beginDate) {
+        params.beginDateStr = this.exportParams.beginDate
+      }
+      if (this.exportParams.endDate) {
+        params.endDateStr = this.exportParams.endDate
+      }
+      this.doExport(params)
+    },
+    doExport(params) {
+      request({
+        url: '/manage/platform/inspection/record/export',
+        method: 'get',
+        params: params,
+        responseType: 'blob'
+      }).then(blob => {
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = '点检记录导出_' + new Date().getTime() + '.zip'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        this.exportLoading = false
+        this.exportOpen = false
+      }).catch(() => {
+        this.exportLoading = false
+        this.exportOpen = false
+      })
     }
   }
 }

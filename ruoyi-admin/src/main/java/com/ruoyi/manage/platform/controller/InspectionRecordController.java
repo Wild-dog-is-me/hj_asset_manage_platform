@@ -1,6 +1,11 @@
 package com.ruoyi.manage.platform.controller;
 
+import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -73,5 +79,20 @@ public class InspectionRecordController extends BaseController
     public AjaxResult remove(@PathVariable Long[] recordIds)
     {
         return toAjax(inspectionRecordService.deleteInspectionRecordByRecordIds(recordIds));
+    }
+
+    @PreAuthorize("@ss.hasPermi('manage:inspection:record:export')")
+    @Log(title = "点检记录", businessType = BusinessType.EXPORT)
+    @GetMapping("/export")
+    public void export(HttpServletResponse response, Long[] recordIds, String beginDateStr, String endDateStr) throws ParseException, IOException
+    {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        Date beginDate = StringUtils.isNotEmpty(beginDateStr) ? sdf.parse(beginDateStr) : null;
+        Date endDate = StringUtils.isNotEmpty(endDateStr) ? sdf.parse(endDateStr) : null;
+        response.setContentType("application/zip");
+        response.setCharacterEncoding("utf-8");
+        String fileName = "点检记录导出_" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        response.setHeader("Content-Disposition", "attachment;filename=" + new String(fileName.getBytes("GBK"), "ISO-8859-1") + ".zip");
+        inspectionRecordService.exportInspectionRecords(recordIds, beginDate, endDate, response.getOutputStream());
     }
 }

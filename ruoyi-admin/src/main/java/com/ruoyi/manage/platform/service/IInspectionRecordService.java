@@ -1,5 +1,8 @@
 package com.ruoyi.manage.platform.service;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Date;
 import java.util.List;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ruoyi.manage.platform.domain.InspectionRecord;
@@ -17,4 +20,6 @@ public interface IInspectionRecordService extends IService<InspectionRecord>
     public int updateInspectionRecord(InspectionRecord inspectionRecord);
 
     public int deleteInspectionRecordByRecordIds(Long[] recordIds);
+
+    public void exportInspectionRecords(Long[] recordIds, Date beginDate, Date endDate, OutputStream outputStream) throws IOException;
 }
