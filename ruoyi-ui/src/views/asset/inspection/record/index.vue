@@ -144,7 +144,7 @@
         <el-form-item label="结束日期" prop="endDate">
           <el-date-picker v-model="exportParams.endDate" value-format="yyyy-MM-dd" type="date" placeholder="不选则不限制结束时间" clearable class="form-control" />
         </el-form-item>
-        <el-alert title="导出会生成一个 ZIP 包，每个记录包含一个 Word 文件" type="info" show-icon :closable="false" />
+        <el-alert title="导出会生成一个 Word 文件，多条记录使用分页符分隔" type="info" show-icon :closable="false" />
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" :loading="exportLoading" @click="confirmExport">确 定 导 出</el-button>
@@ -318,7 +318,7 @@ export default {
         const url = window.URL.createObjectURL(new Blob([blob]))
         const link = document.createElement('a')
         link.href = url
-        link.download = '点检记录导出_' + new Date().getTime() + '.zip'
+        link.download = '点检记录导出_' + new Date().getTime() + '.docx'
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)

@@ -89,10 +89,10 @@ public class InspectionRecordController extends BaseController
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         Date beginDate = StringUtils.isNotEmpty(beginDateStr) ? sdf.parse(beginDateStr) : null;
         Date endDate = StringUtils.isNotEmpty(endDateStr) ? sdf.parse(endDateStr) : null;
-        response.setContentType("application/zip");
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         response.setCharacterEncoding("utf-8");
         String fileName = "点检记录导出_" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        response.setHeader("Content-Disposition", "attachment;filename=" + new String(fileName.getBytes("GBK"), "ISO-8859-1") + ".zip");
+        response.setHeader("Content-Disposition", "attachment;filename=" + new String(fileName.getBytes("GBK"), "ISO-8859-1") + ".docx");
         inspectionRecordService.exportInspectionRecords(recordIds, beginDate, endDate, response.getOutputStream());
     }
 }

@@ -10,8 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -200,28 +199,36 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
                 .orderByAsc(InspectionRecordDetail::getDetailId)));
         }
 
-        ZipOutputStream zipOut = new ZipOutputStream(outputStream);
+        XWPFDocument doc = new XWPFDocument();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
-        for (InspectionRecord record : records)
-        {
-            String safeTitle = record.getRecordTitle().replaceAll("[\\\\/:*?\"<>|]", "_");
-            String dateStr = record.getInspectionDate() != null ? sdf.format(record.getInspectionDate()) : "";
+        // 文档大标题
+        XWPFParagraph mainTitle = doc.createParagraph();
+        mainTitle.setAlignment(ParagraphAlignment.CENTER);
+        mainTitle.setSpacingAfter(400);
+        XWPFRun mainTitleRun = mainTitle.createRun();
+        mainTitleRun.setText("点检记录导出");
+        mainTitleRun.setFontSize(20);
+        mainTitleRun.setBold(true);
 
-            byte[] wordBytes = generateWordBytes(record, dateStr);
-            zipOut.putNextEntry(new ZipEntry(safeTitle + "_" + dateStr + ".docx"));
-            zipOut.write(wordBytes);
-            zipOut.closeEntry();
+        for (int i = 0; i < records.size(); i++)
+        {
+            if (i > 0)
+            {
+                XWPFParagraph pageBreak = doc.createParagraph();
+                pageBreak.createRun().addBreak(BreakType.PAGE);
+            }
+            InspectionRecord record = records.get(i);
+            String dateStr = record.getInspectionDate() != null ? sdf.format(record.getInspectionDate()) : "";
+            appendRecordToDocument(doc, record, dateStr);
         }
 
-        zipOut.close();
+        doc.write(outputStream);
+        doc.close();
     }
 
-    private byte[] generateWordBytes(InspectionRecord record, String dateStr)
+    private void appendRecordToDocument(XWPFDocument doc, InspectionRecord record, String dateStr)
     {
-        XWPFDocument doc = new XWPFDocument();
-
-        // 标题
         XWPFParagraph titlePara = doc.createParagraph();
         titlePara.setAlignment(ParagraphAlignment.CENTER);
         titlePara.setSpacingAfter(200);
@@ -230,7 +237,6 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
         titleRun.setFontSize(16);
         titleRun.setBold(true);
 
-        // 基本信息表格
         XWPFTable infoTable = doc.createTable(1, 6);
         infoTable.setWidth("4500");
         setTableBorder(infoTable);
@@ -242,20 +248,17 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
 
         doc.createParagraph();
 
-        // 明细标题
         XWPFParagraph detailTitle = doc.createParagraph();
         XWPFRun detailTitleRun = detailTitle.createRun();
         detailTitleRun.setText("点检明细");
         detailTitleRun.setBold(true);
         detailTitleRun.setFontSize(12);
 
-        // 明细表格
         List<InspectionRecordDetail> details = record.getDetails();
         XWPFTable detailTable = doc.createTable();
         detailTable.setWidth("7500");
         setTableBorder(detailTable);
 
-        // 表头行
         XWPFTableRow headerRow = detailTable.getRow(0);
         String[] headers = {"点检路径", "填写点", "填写值"};
         int[] colWidths = {3000, 1800, 2700};
@@ -275,7 +278,6 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
             cr.setFontSize(10);
         }
 
-        // 数据行
         if (StringUtils.isNotEmpty(details))
         {
             for (InspectionRecordDetail detail : details)
@@ -311,18 +313,6 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
             XWPFRun cr = cp.createRun();
             cr.setText("暂无明细数据");
             cr.setFontSize(10);
-        }
-
-        try
-        {
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            doc.write(baos);
-            doc.close();
-            return baos.toByteArray();
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
         }
     }
 
