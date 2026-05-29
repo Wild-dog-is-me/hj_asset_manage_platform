@@ -37,3 +37,43 @@ export function delAssetInfo(assetId) {
     method: 'delete'
   })
 }
+
+export function receiveAsset(data) {
+  return request({
+    url: '/manage/platform/asset/receive',
+    method: 'post',
+    data: data
+  })
+}
+
+export function returnAsset(data) {
+  return request({
+    url: '/manage/platform/asset/return',
+    method: 'post',
+    data: data
+  })
+}
+
+export function transferAsset(data) {
+  return request({
+    url: '/manage/platform/asset/transfer',
+    method: 'post',
+    data: data
+  })
+}
+
+export function scrapAsset(data) {
+  return request({
+    url: '/manage/platform/asset/scrap',
+    method: 'post',
+    data: data
+  })
+}
+
+export function listTransferRecord(assetId) {
+  return request({
+    url: '/manage/platform/asset/transfer/list',
+    method: 'get',
+    params: { assetId: assetId }
+  })
+}
