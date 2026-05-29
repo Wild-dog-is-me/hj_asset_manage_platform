@@ -77,3 +77,10 @@ export function listTransferRecord(assetId) {
     params: { assetId: assetId }
   })
 }
+
+export function getAssetStatistics() {
+  return request({
+    url: '/manage/platform/asset/statistics',
+    method: 'get'
+  })
+}

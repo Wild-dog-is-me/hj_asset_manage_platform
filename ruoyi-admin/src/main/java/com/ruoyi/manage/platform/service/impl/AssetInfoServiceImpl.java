@@ -1,7 +1,9 @@
 package com.ruoyi.manage.platform.service.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -19,6 +21,7 @@ import com.ruoyi.manage.platform.domain.AssetInfo;
 import com.ruoyi.manage.platform.domain.AssetReceiveDTO;
 import com.ruoyi.manage.platform.domain.AssetReturnDTO;
 import com.ruoyi.manage.platform.domain.AssetScrapDTO;
+import com.ruoyi.manage.platform.domain.AssetStatisticsDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferRecord;
 import com.ruoyi.manage.platform.mapper.AssetInfoMapper;
@@ -316,6 +319,54 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
         asset.setCostCenter("");
         asset.setUpdateTime(DateUtils.getNowDate());
         return updateById(asset) ? 1 : 0;
+    }
+
+    @Override
+    public AssetStatisticsDTO getAssetStatistics()
+    {
+        List<AssetInfo> allAssets = list();
+        AssetStatisticsDTO dto = new AssetStatisticsDTO();
+        dto.setTotalCount((long) allAssets.size());
+
+        Long inStockCount = 0L, inUseCount = 0L, scrappedCount = 0L;
+        Map<String, Long> statusCountMap = new HashMap<>();
+        Map<String, Long> categoryCountMap = new HashMap<>();
+        for (AssetInfo asset : allAssets)
+        {
+            if (STATUS_IN_STOCK.equals(asset.getAssetStatus())) inStockCount++;
+            else if (STATUS_IN_USE.equals(asset.getAssetStatus())) inUseCount++;
+            else if (STATUS_SCRAPPED.equals(asset.getAssetStatus())) scrappedCount++;
+
+            String status = asset.getAssetStatus();
+            statusCountMap.merge(status, 1L, Long::sum);
+
+            String category = StringUtils.isNotEmpty(asset.getAssetCategory()) ? asset.getAssetCategory() : "未分类";
+            categoryCountMap.merge(category, 1L, Long::sum);
+        }
+        dto.setInStockCount(inStockCount);
+        dto.setInUseCount(inUseCount);
+        dto.setScrappedCount(scrappedCount);
+
+        List<Map<String, Object>> statusPieData = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : statusCountMap.entrySet())
+        {
+            Map<String, Object> item = new HashMap<>();
+            item.put("name", entry.getKey());
+            item.put("value", entry.getValue());
+            statusPieData.add(item);
+        }
+        dto.setStatusPieData(statusPieData);
+
+        List<Map<String, Object>> categoryPieData = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : categoryCountMap.entrySet())
+        {
+            Map<String, Object> item = new HashMap<>();
+            item.put("name", entry.getKey());
+            item.put("value", entry.getValue());
+            categoryPieData.add(item);
+        }
+        dto.setCategoryPieData(categoryPieData);
+        return dto;
     }
 
     /**

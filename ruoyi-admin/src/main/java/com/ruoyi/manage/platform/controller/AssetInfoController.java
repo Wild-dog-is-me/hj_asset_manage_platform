@@ -24,6 +24,7 @@ import com.ruoyi.manage.platform.domain.AssetInfoExport;
 import com.ruoyi.manage.platform.domain.AssetReceiveDTO;
 import com.ruoyi.manage.platform.domain.AssetReturnDTO;
 import com.ruoyi.manage.platform.domain.AssetScrapDTO;
+import com.ruoyi.manage.platform.domain.AssetStatisticsDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferRecord;
 import com.ruoyi.manage.platform.service.IAssetInfoService;
@@ -172,5 +173,16 @@ public class AssetInfoController extends BaseController
         startPage();
         List<AssetTransferRecord> list = transferRecordService.selectTransferRecordList(record);
         return getDataTable(list);
+    }
+
+    /**
+     * 获取资产统计数据（首页仪表盘用）。
+     */
+    @PreAuthorize("@ss.hasPermi('manage:asset:list')")
+    @GetMapping("/statistics")
+    public AjaxResult statistics()
+    {
+        AssetStatisticsDTO dto = assetInfoService.getAssetStatistics();
+        return success(dto);
     }
 }

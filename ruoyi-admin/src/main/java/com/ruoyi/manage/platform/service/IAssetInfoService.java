@@ -6,6 +6,7 @@ import com.ruoyi.manage.platform.domain.AssetInfo;
 import com.ruoyi.manage.platform.domain.AssetReceiveDTO;
 import com.ruoyi.manage.platform.domain.AssetReturnDTO;
 import com.ruoyi.manage.platform.domain.AssetScrapDTO;
+import com.ruoyi.manage.platform.domain.AssetStatisticsDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferDTO;
 
 /**
@@ -59,4 +60,11 @@ public interface IAssetInfoService extends IService<AssetInfo>
      * @return 影响行数
      */
     public int scrapAsset(AssetScrapDTO dto);
+
+    /**
+     * 获取资产统计数据（首页仪表盘用）。
+     *
+     * @return 统计结果
+     */
+    public AssetStatisticsDTO getAssetStatistics();
 }
