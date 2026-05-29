@@ -1,0 +1,6 @@
+*.jar
+data/
+!data/.gitkeep
+release_pkg/
+backups/
+dist/

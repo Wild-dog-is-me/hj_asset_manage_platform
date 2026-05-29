@@ -79,7 +79,7 @@
 
     <pagination v-show="total>0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
 
-    <el-dialog :title="title" :visible.sync="open" width="1180px" append-to-body>
+    <el-dialog :title="title" :visible.sync="open" width="1280px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="90px">
         <el-row>
           <el-col :span="8">
@@ -115,16 +115,22 @@
         </el-row>
         <el-divider content-position="left">点检明细</el-divider>
         <el-alert title="新增记录时会按当前点检项目配置生成明细；后续配置变化不会影响已保存记录。" type="info" show-icon :closable="false" class="detail-alert" />
-        <el-table :data="form.details" border size="mini" max-height="520">
+        <el-table :data="form.details" border size="mini" max-height="560">
           <el-table-column label="点检路径" prop="itemPath" min-width="260" :show-overflow-tooltip="true" />
-          <el-table-column label="填写点" prop="fieldLabel" width="150" />
-          <el-table-column label="填写值" min-width="220">
+          <el-table-column label="填写点" width="160">
+            <template slot-scope="scope">
+              <span>{{ scope.row.fieldLabel }}</span>
+              <span v-if="scope.row.required === '1'" style="color: #F56C6C; margin-left: 2px;">*</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="填写值" min-width="260">
             <template slot-scope="scope">
               <el-checkbox v-if="scope.row.fieldType === 'CHECKBOX'" v-model="scope.row.fieldValue" true-label="Y" false-label="N">是</el-checkbox>
               <el-input-number v-else-if="scope.row.fieldType === 'NUMBER'" v-model="scope.row.fieldValue" controls-position="right" class="form-control" />
               <el-select v-else-if="scope.row.fieldType === 'SELECT'" v-model="scope.row.fieldValue" clearable class="form-control">
                 <el-option v-for="option in splitOptions(scope.row.fieldOptions)" :key="option" :label="option" :value="option" />
               </el-select>
+              <editor v-else-if="scope.row.fieldType === 'RICHTEXT'" v-model="scope.row.fieldValue" :min-height="180" class="richtext-editor" />
               <el-input v-else v-model="scope.row.fieldValue" placeholder="请输入" />
             </template>
           </el-table-column>
@@ -157,6 +163,7 @@
 <script>
 import { listInspectionRecord, getInspectionRecord, buildInspectionRecordTemplate, addInspectionRecord, updateInspectionRecord, delInspectionRecord } from "@/api/asset/inspection"
 import request from '@/utils/request'
+import { MessageBox } from 'element-ui'
 
 export default {
   name: "InspectionRecord",
@@ -251,6 +258,24 @@ export default {
     submitForm() {
       this.$refs["form"].validate(valid => {
         if (valid) {
+          if (this.form.status === 'COMPLETED') {
+            const missingFields = []
+            if (this.form.details) {
+              this.form.details.forEach(d => {
+                if (d.required === '1') {
+                  const val = d.fieldValue
+                  if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+                    missingFields.push((d.itemPath || '') + ' / ' + (d.fieldLabel || ''))
+                  }
+                }
+              })
+            }
+            if (missingFields.length > 0) {
+              const msg = '以下必填字段尚未填写：<br/>' + missingFields.map((f, i) => (i + 1) + '. ' + f.replace(/\//g, ' <b style="color:#909399">&gt;</b> ')).join('<br/>')
+              MessageBox.alert(msg, '系统提示', { dangerouslyUseHTMLString: true, type: 'error' })
+              return
+            }
+          }
           if (this.form.recordId != undefined) {
             updateInspectionRecord(this.form).then(() => {
               this.$modal.msgSuccess("修改成功")
@@ -358,5 +383,9 @@ export default {
 
 .detail-alert {
   margin-bottom: 12px;
+}
+
+.richtext-editor {
+  min-width: 380px;
 }
 </style>

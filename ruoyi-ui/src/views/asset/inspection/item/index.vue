@@ -137,12 +137,14 @@
                 <el-option label="文本" value="TEXT" />
                 <el-option label="数字" value="NUMBER" />
                 <el-option label="下拉" value="SELECT" />
+                <el-option label="图文" value="RICHTEXT" />
               </el-select>
             </template>
           </el-table-column>
           <el-table-column label="选项" min-width="150">
             <template slot-scope="scope">
-              <el-input v-model="scope.row.fieldOptions" placeholder="下拉选项逗号分隔" />
+              <el-input v-if="scope.row.fieldType === 'SELECT'" v-model="scope.row.fieldOptions" placeholder="下拉选项逗号分隔" />
+              <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
           <el-table-column label="必填" width="80" align="center">

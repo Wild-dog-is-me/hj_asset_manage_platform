@@ -1,0 +1,89 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hj_prod_mysql
+    restart: unless-stopped
+    ports:
+      - "13398:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: deQsa#$@
+      MYSQL_DEFAULT_CHARACTER_SET: utf8mb4
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./conf/mysql:/etc/mysql/conf.d
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pdeQsa#$@"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hj_prod_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: hj_prod_redis
+    restart: unless-stopped
+    ports:
+      - "16789:6379"
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./data/redis:/data
+      - ./conf/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "fsWds#$%", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hj_prod_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        BASE_IMAGE_PREFIX: ${BASE_IMAGE_PREFIX:-}
+    image: hj_prod_asset_manage_backend:latest
+    container_name: hj_prod_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data/upload:/app/uploadPath
+      - ./data/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hj_prod_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        BASE_IMAGE_PREFIX: ${BASE_IMAGE_PREFIX:-}
+    image: hj_prod_asset_manage_frontend:latest
+    container_name: hj_prod_web
+    restart: unless-stopped
+    ports:
+      - "8088:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - hj_prod_network
+
+networks:
+  hj_prod_network:
+    driver: bridge

@@ -30,6 +30,9 @@ public class InspectionRecordDetail
     @TableField(exist = false)
     private String fieldOptions;
 
+    @TableField(exist = false)
+    private String required;
+
     private String fieldValue;
 
     private Integer orderNum;
@@ -132,6 +135,16 @@ public class InspectionRecordDetail
     public void setFieldOptions(String fieldOptions)
     {
         this.fieldOptions = fieldOptions;
+    }
+
+    public String getRequired()
+    {
+        return required;
+    }
+
+    public void setRequired(String required)
+    {
+        this.required = required;
     }
 
     public String getFieldValue()

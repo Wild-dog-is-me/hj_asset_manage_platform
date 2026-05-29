@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.poi.xwpf.usermodel.BreakType;
@@ -75,9 +76,13 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
             Map<Long, String> fieldOptionsMap = allFields.stream()
                 .filter(f -> StringUtils.isNotEmpty(f.getFieldOptions()))
                 .collect(Collectors.toMap(InspectionItemField::getFieldId, InspectionItemField::getFieldOptions, (a, b) -> a));
+            Map<Long, String> fieldRequiredMap = allFields.stream()
+                .filter(f -> "1".equals(f.getRequired()))
+                .collect(Collectors.toMap(InspectionItemField::getFieldId, f -> "1", (a, b) -> a));
             for (InspectionRecordDetail detail : record.getDetails())
             {
                 detail.setFieldOptions(fieldOptionsMap.get(detail.getFieldId()));
+                detail.setRequired(fieldRequiredMap.get(detail.getFieldId()));
             }
         }
         return record;
@@ -113,6 +118,7 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
             detail.setFieldKey(field.getFieldKey());
             detail.setFieldType(field.getFieldType());
             detail.setFieldOptions(field.getFieldOptions());
+            detail.setRequired(field.getRequired());
             detail.setOrderNum(orderNum++);
             details.add(detail);
         }
@@ -124,6 +130,7 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
     @Transactional(rollbackFor = Exception.class)
     public int insertInspectionRecord(InspectionRecord inspectionRecord)
     {
+        validateRequiredFields(inspectionRecord);
         inspectionRecord.setCreateTime(DateUtils.getNowDate());
         boolean result = save(inspectionRecord);
         saveDetails(inspectionRecord);
@@ -134,6 +141,7 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
     @Transactional(rollbackFor = Exception.class)
     public int updateInspectionRecord(InspectionRecord inspectionRecord)
     {
+        validateRequiredFields(inspectionRecord);
         inspectionRecord.setUpdateTime(DateUtils.getNowDate());
         boolean result = updateById(inspectionRecord);
         detailMapper.delete(new LambdaQueryWrapper<InspectionRecordDetail>().eq(InspectionRecordDetail::getRecordId, inspectionRecord.getRecordId()));
@@ -147,6 +155,48 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
     {
         detailMapper.delete(new LambdaQueryWrapper<InspectionRecordDetail>().in(InspectionRecordDetail::getRecordId, Arrays.asList(recordIds)));
         return removeByIds(Arrays.asList(recordIds)) ? recordIds.length : 0;
+    }
+
+    private void validateRequiredFields(InspectionRecord inspectionRecord)
+    {
+        if (!"COMPLETED".equals(inspectionRecord.getStatus()) || StringUtils.isEmpty(inspectionRecord.getDetails()))
+        {
+            return;
+        }
+
+        List<Long> fieldIds = inspectionRecord.getDetails().stream()
+            .map(InspectionRecordDetail::getFieldId)
+            .distinct()
+            .collect(Collectors.toList());
+        List<InspectionItemField> requiredFields = fieldMapper.selectList(new LambdaQueryWrapper<InspectionItemField>()
+            .in(InspectionItemField::getFieldId, fieldIds)
+            .eq(InspectionItemField::getRequired, "1"));
+        if (StringUtils.isEmpty(requiredFields))
+        {
+            return;
+        }
+
+        Set<Long> requiredFieldIds = requiredFields.stream()
+            .map(InspectionItemField::getFieldId)
+            .collect(Collectors.toSet());
+
+        List<String> missingFields = new ArrayList<>();
+        for (InspectionRecordDetail detail : inspectionRecord.getDetails())
+        {
+            if (requiredFieldIds.contains(detail.getFieldId()))
+            {
+                String val = detail.getFieldValue();
+                if (val == null || val.trim().isEmpty())
+                {
+                    missingFields.add(StringUtils.defaultString(detail.getItemPath()) + " / " + StringUtils.defaultString(detail.getFieldLabel()));
+                }
+            }
+        }
+
+        if (!missingFields.isEmpty())
+        {
+            throw new RuntimeException("以下必填字段尚未填写： " + String.join("； ", missingFields));
+        }
     }
 
     private void saveDetails(InspectionRecord inspectionRecord)
@@ -347,6 +397,7 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
         }
     }
 
+
     private String fieldValueDisplay(InspectionRecordDetail detail)
     {
         String val = detail.getFieldValue();
@@ -354,6 +405,20 @@ public class InspectionRecordServiceImpl extends ServiceImpl<InspectionRecordMap
         {
             return "Y".equals(val) ? "是" : ("N".equals(val) ? "否" : "");
         }
+        if ("RICHTEXT".equals(detail.getFieldType()))
+        {
+            return stripHtml(StringUtils.defaultString(val));
+        }
         return StringUtils.defaultString(val);
+    }
+
+    private String stripHtml(String html)
+    {
+        if (StringUtils.isEmpty(html))
+        {
+            return "";
+        }
+        return html.replaceAll("<[^>]+>", "").replaceAll("&nbsp;", " ").replaceAll("&lt;", "<")
+            .replaceAll("&gt;", ">").replaceAll("&amp;", "&").replaceAll("&quot;", "\"").trim();
     }
 }
