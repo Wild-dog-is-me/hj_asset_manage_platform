@@ -182,6 +182,8 @@ domain/
 
 每次写完后，必须执行：
 1. `git add -A`
-2. `git commit -m "描述本次改动"` feat:xxx fix: refactor:xxx 要是这样的格式
+2. `git commit -m "feat: 简要描述"` 或 `git commit -m "refactor: 简要描述"` 或 `git commit -m "fix: 简要描述"`
 3. `git push`
-不能遗漏，不能攒多次一起提交。
+- 提交信息只用单行简要描述，格式为 `类型: 中文描述`，不需要多行正文
+- 类型包括：`feat`（新功能）、`fix`（修复）、`refactor`（重构）、`style`（样式）、`docs`（文档）
+- 不能遗漏，不能攒多次一起提交
