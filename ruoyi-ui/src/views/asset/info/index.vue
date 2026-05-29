@@ -124,8 +124,9 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="opt-cell" width="330" fixed="right">
+      <el-table-column label="操作" align="center" class-name="opt-cell" width="370" fixed="right">
         <template slot-scope="scope">
+          <el-button size="mini" type="text" icon="el-icon-view" @click="handleDetail(scope.row)" v-hasPermi="['manage:asset:list']">详情</el-button>
           <el-button size="mini" type="text" icon="el-icon-edit" @click="handleUpdate(scope.row)" v-hasPermi="['manage:asset:edit']">修改</el-button>
           <el-button size="mini" type="text" icon="el-icon-s-order" @click="handleTransferHistory(scope.row)" v-hasPermi="['manage:asset:edit']">流转</el-button>
           <el-button v-if="scope.row.assetStatus === 'IN_STOCK'" size="mini" type="text" icon="el-icon-check" @click="handleTransferAction('receive', scope.row)" v-hasPermi="['manage:asset:edit']">领用</el-button>
@@ -243,6 +244,78 @@
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="submitForm">确 定</el-button>
         <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 资产详情弹窗 -->
+    <el-dialog :title="'资产详情 - ' + (detailAsset.assetNo || detailAsset.assetId)" :visible.sync="detailOpen" width="900px" append-to-body>
+      <el-tabs v-model="detailTab">
+        <el-tab-pane label="基本信息" name="info">
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">账套</span><span class="detail-value">{{ getDictLabel(dict.type.asset_account_set, detailAsset.accountSet) || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">资产类别</span><span class="detail-value">{{ getDictLabel(dict.type.asset_category, detailAsset.assetCategory) || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">资产状态</span><dict-tag :options="dict.type.asset_status" :value="detailAsset.assetStatus" /></el-col>
+          </el-row>
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">资产编号</span><span class="detail-value">{{ detailAsset.assetNo || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">设备编号</span><span class="detail-value">{{ detailAsset.deviceNo || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">财务帐编号</span><span class="detail-value">{{ detailAsset.financeAccountNo || '-' }}</span></el-col>
+          </el-row>
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">设备类别</span><span class="detail-value">{{ getDictLabel(dict.type.asset_device_type, detailAsset.deviceType) || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">资产名称</span><span class="detail-value">{{ detailAsset.assetName || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">型号</span><span class="detail-value">{{ detailAsset.model || '-' }}</span></el-col>
+          </el-row>
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">单位</span><span class="detail-value">{{ detailAsset.unit || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">数量</span><span class="detail-value">{{ detailAsset.quantity || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">使用部门</span><span class="detail-value">{{ detailAsset.deptName || '-' }}</span></el-col>
+          </el-row>
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">成本中心</span><span class="detail-value">{{ detailAsset.costCenter || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">使用人</span><span class="detail-value">{{ detailAsset.userName || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">创建时间</span><span class="detail-value">{{ parseTime(detailAsset.createTime) }}</span></el-col>
+          </el-row>
+          <el-row :gutter="20" class="detail-row">
+            <el-col :span="8"><span class="detail-label">更新时间</span><span class="detail-value">{{ parseTime(detailAsset.updateTime) }}</span></el-col>
+            <el-col :span="16"><span class="detail-label">备注</span><span class="detail-value">{{ detailAsset.remark || '-' }}</span></el-col>
+          </el-row>
+          <div v-if="detailAsset.assetStatus !== 'SCRAPPED'" class="detail-actions">
+            <el-button v-if="detailAsset.assetStatus === 'IN_STOCK'" type="primary" size="small" icon="el-icon-check" @click="handleTransferAction('receive', detailAsset); detailTransferRefresh = true">领用</el-button>
+            <el-button v-if="detailAsset.assetStatus === 'IN_USE'" type="success" size="small" icon="el-icon-refresh-left" @click="handleTransferAction('return', detailAsset); detailTransferRefresh = true">归还</el-button>
+            <el-button v-if="detailAsset.assetStatus === 'IN_USE'" type="warning" size="small" icon="el-icon-sort" @click="handleTransferAction('transfer', detailAsset); detailTransferRefresh = true">调拨</el-button>
+            <el-button type="danger" size="small" icon="el-icon-close" @click="handleTransferAction('scrap', detailAsset); detailTransferRefresh = true">报废</el-button>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="流转记录" name="transfer">
+          <div v-if="detailRecords.length > 0" class="timeline-wrap">
+            <el-timeline>
+              <el-timeline-item v-for="item in detailRecords" :key="item.recordId" :timestamp="parseTime(item.operateTime)" :type="bizTimelineType(item.bizType)" placement="top">
+                <el-card shadow="hover" class="timeline-card">
+                  <div class="timeline-card-header">
+                    <el-tag :type="bizTagType(item.bizType)" size="small">{{ getDictLabel(dict.type.asset_transfer_type, item.bizType) }}</el-tag>
+                  </div>
+                  <div class="timeline-card-body">
+                    <div class="timeline-status-line">
+                      <span>{{ item.beforeStatus ? getDictLabel(dict.type.asset_status, item.beforeStatus) : '-' }}</span>
+                      <i class="el-icon-right timeline-arrow" />
+                      <span>{{ getDictLabel(dict.type.asset_status, item.afterStatus) }}</span>
+                    </div>
+                    <div v-if="hasDeptChange(item)" class="timeline-change-info">
+                      部门: {{ item.beforeDeptName || '-' }} → {{ item.afterDeptName || '-' }}<template v-if="item.beforeUserName || item.afterUserName"> | 使用人: {{ item.beforeUserName || '-' }} → {{ item.afterUserName || '-' }}</template>
+                    </div>
+                    <div v-if="item.changeReason" class="timeline-reason">原因: {{ item.changeReason }}</div>
+                    <div class="timeline-operator">操作人: {{ item.operator || '-' }}</div>
+                  </div>
+                </el-card>
+              </el-timeline-item>
+            </el-timeline>
+          </div>
+          <el-empty v-else description="暂无流转记录" />
+        </el-tab-pane>
+      </el-tabs>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="detailOpen = false">关 闭</el-button>
       </div>
     </el-dialog>
 
@@ -375,7 +448,12 @@ export default {
       transferForm: {},
       transferRules: {},
       historyOpen: false,
-      transferRecords: []
+      transferRecords: [],
+      detailOpen: false,
+      detailAsset: {},
+      detailRecords: [],
+      detailTab: "info",
+      detailTransferRefresh: false
     }
   },
   computed: {
@@ -502,6 +580,19 @@ export default {
         ...this.queryParams
       }, `asset_info_${new Date().getTime()}.xlsx`)
     },
+    handleDetail(row) {
+      this.detailAsset = {}
+      this.detailRecords = []
+      this.detailTab = "info"
+      this.detailTransferRefresh = false
+      this.detailOpen = true
+      getAssetInfo(row.assetId).then(response => {
+        this.detailAsset = response.data
+      })
+      listTransferRecord(row.assetId).then(response => {
+        this.detailRecords = response.data || []
+      })
+    },
     handleTransferAction(cmd, row) {
       this.currentAssetRow = row
       this.transferType = cmd
@@ -555,6 +646,17 @@ export default {
           this.transferOpen = false
           this.transferLoading = false
           this.getList()
+          if (this.detailTransferRefresh) {
+            this.detailTransferRefresh = false
+            if (this.detailAsset.assetId) {
+              getAssetInfo(this.detailAsset.assetId).then(response => {
+                this.detailAsset = response.data
+              })
+              listTransferRecord(this.detailAsset.assetId).then(response => {
+                this.detailRecords = response.data || []
+              })
+            }
+          }
         }).catch(() => {
           this.transferLoading = false
         })
@@ -620,6 +722,25 @@ export default {
 .opt-cell .el-button--text {
   padding-left: 4px;
   padding-right: 4px;
+}
+
+.detail-row {
+  margin-bottom: 14px;
+  line-height: 32px;
+}
+.detail-label {
+  color: #909399;
+  font-size: 13px;
+  margin-right: 12px;
+}
+.detail-value {
+  color: #303133;
+  font-size: 13px;
+}
+.detail-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
 }
 
 .transfer-context-card {

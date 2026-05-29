@@ -79,6 +79,12 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
     @Override
     public int insertAssetInfo(AssetInfo assetInfo)
     {
+        validateAssetUniqueness(assetInfo, false);
+        validateAssetStatusConsistency(assetInfo);
+        if (StringUtils.isEmpty(assetInfo.getAssetName()))
+        {
+            throw new ServiceException("资产名称不能为空");
+        }
         assetInfo.setCreateTime(DateUtils.getNowDate());
         return save(assetInfo) ? 1 : 0;
     }
@@ -86,6 +92,16 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
     @Override
     public int updateAssetInfo(AssetInfo assetInfo)
     {
+        if (assetInfo.getAssetId() == null)
+        {
+            throw new ServiceException("资产ID不能为空");
+        }
+        validateAssetUniqueness(assetInfo, true);
+        validateAssetStatusConsistency(assetInfo);
+        if (StringUtils.isEmpty(assetInfo.getAssetName()))
+        {
+            throw new ServiceException("资产名称不能为空");
+        }
         assetInfo.setUpdateTime(DateUtils.getNowDate());
         return updateById(assetInfo) ? 1 : 0;
     }
@@ -312,6 +328,85 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
             return "未知资产";
         }
         return StringUtils.isNotEmpty(asset.getAssetNo()) ? asset.getAssetNo() : String.valueOf(asset.getAssetId());
+    }
+
+    /**
+     * 校验资产编号、设备编号、财务帐编号的唯一性。
+     *
+     * @param assetInfo 资产信息
+     * @param isUpdate  是否为修改操作（修改时会排除自身）
+     */
+    private void validateAssetUniqueness(AssetInfo assetInfo, boolean isUpdate)
+    {
+        if (StringUtils.isNotEmpty(assetInfo.getAssetNo()))
+        {
+            LambdaQueryWrapper<AssetInfo> wrapper = new LambdaQueryWrapper<AssetInfo>()
+                .eq(AssetInfo::getAssetNo, assetInfo.getAssetNo());
+            if (isUpdate)
+            {
+                wrapper.ne(AssetInfo::getAssetId, assetInfo.getAssetId());
+            }
+            AssetInfo exist = getOne(wrapper);
+            if (exist != null)
+            {
+                throw new ServiceException("资产编号[" + assetInfo.getAssetNo() + "]已被资产[" + exist.getAssetName() + "]使用，请勿重复");
+            }
+        }
+        if (StringUtils.isNotEmpty(assetInfo.getDeviceNo()))
+        {
+            LambdaQueryWrapper<AssetInfo> wrapper = new LambdaQueryWrapper<AssetInfo>()
+                .eq(AssetInfo::getDeviceNo, assetInfo.getDeviceNo());
+            if (isUpdate)
+            {
+                wrapper.ne(AssetInfo::getAssetId, assetInfo.getAssetId());
+            }
+            AssetInfo exist = getOne(wrapper);
+            if (exist != null)
+            {
+                throw new ServiceException("设备编号[" + assetInfo.getDeviceNo() + "]已被资产[" + exist.getAssetName() + "]使用，请勿重复");
+            }
+        }
+        if (StringUtils.isNotEmpty(assetInfo.getFinanceAccountNo()))
+        {
+            LambdaQueryWrapper<AssetInfo> wrapper = new LambdaQueryWrapper<AssetInfo>()
+                .eq(AssetInfo::getFinanceAccountNo, assetInfo.getFinanceAccountNo());
+            if (isUpdate)
+            {
+                wrapper.ne(AssetInfo::getAssetId, assetInfo.getAssetId());
+            }
+            AssetInfo exist = getOne(wrapper);
+            if (exist != null)
+            {
+                throw new ServiceException("财务帐编号[" + assetInfo.getFinanceAccountNo() + "]已被资产[" + exist.getAssetName() + "]使用，请勿重复");
+            }
+        }
+    }
+
+    /**
+     * 校验资产状态与使用部门、使用人的一致性。
+     * 库存中/已报废的资产不允许设置归属，使用中的资产必须设置部门和使用人。
+     */
+    private void validateAssetStatusConsistency(AssetInfo assetInfo)
+    {
+        String status = assetInfo.getAssetStatus();
+        if (STATUS_IN_STOCK.equals(status) || STATUS_SCRAPPED.equals(status))
+        {
+            if (assetInfo.getDeptId() != null || StringUtils.isNotEmpty(assetInfo.getUserName()))
+            {
+                throw new ServiceException("库存中或已报废的资产不应设置使用部门和使用人");
+            }
+        }
+        else if (STATUS_IN_USE.equals(status))
+        {
+            if (assetInfo.getDeptId() == null)
+            {
+                throw new ServiceException("使用中的资产必须设置使用部门");
+            }
+            if (StringUtils.isEmpty(assetInfo.getUserName()))
+            {
+                throw new ServiceException("使用中的资产必须设置使用人");
+            }
+        }
     }
 
     private LambdaQueryWrapper<AssetInfo> buildQueryWrapper(AssetInfo assetInfo)

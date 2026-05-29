@@ -138,3 +138,11 @@
 - 搜索区域使用 `search-card` class + `search-control` class，与项目已有页面保持一致。
 - 同一页面内不得出现多种不同风格的间距、字号、颜色方案。
 - 新增 class 命名采用 kebab-case，避免驼峰命名。
+
+## 写完必提交Git
+
+每次写完后，必须执行：
+1. `git add -A`
+2. `git commit -m "描述本次改动"` feat:xxx fix: refactor:xxx 要是这样的格式
+3. `git push`
+不能遗漏，不能攒多次一起提交。
