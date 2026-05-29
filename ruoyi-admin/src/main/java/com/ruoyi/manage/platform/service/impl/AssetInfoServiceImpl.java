@@ -18,12 +18,12 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.manage.platform.domain.AssetInfo;
-import com.ruoyi.manage.platform.domain.AssetReceiveDTO;
-import com.ruoyi.manage.platform.domain.AssetReturnDTO;
-import com.ruoyi.manage.platform.domain.AssetScrapDTO;
-import com.ruoyi.manage.platform.domain.AssetStatisticsDTO;
-import com.ruoyi.manage.platform.domain.AssetTransferDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferRecord;
+import com.ruoyi.manage.platform.domain.dto.AssetReceiveDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetReturnDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetScrapDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetTransferDTO;
+import com.ruoyi.manage.platform.domain.vo.AssetStatisticsVO;
 import com.ruoyi.manage.platform.mapper.AssetInfoMapper;
 import com.ruoyi.manage.platform.service.IAssetInfoService;
 import com.ruoyi.manage.platform.service.IAssetTransferRecordService;
@@ -322,10 +322,10 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
     }
 
     @Override
-    public AssetStatisticsDTO getAssetStatistics()
+    public AssetStatisticsVO getAssetStatistics()
     {
         List<AssetInfo> allAssets = list();
-        AssetStatisticsDTO dto = new AssetStatisticsDTO();
+        AssetStatisticsVO dto = new AssetStatisticsVO();
         dto.setTotalCount((long) allAssets.size());
 
         Long inStockCount = 0L, inUseCount = 0L, scrappedCount = 0L;

@@ -20,13 +20,13 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.manage.platform.domain.AssetInfo;
-import com.ruoyi.manage.platform.domain.AssetInfoExport;
-import com.ruoyi.manage.platform.domain.AssetReceiveDTO;
-import com.ruoyi.manage.platform.domain.AssetReturnDTO;
-import com.ruoyi.manage.platform.domain.AssetScrapDTO;
-import com.ruoyi.manage.platform.domain.AssetStatisticsDTO;
-import com.ruoyi.manage.platform.domain.AssetTransferDTO;
 import com.ruoyi.manage.platform.domain.AssetTransferRecord;
+import com.ruoyi.manage.platform.domain.dto.AssetReceiveDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetReturnDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetScrapDTO;
+import com.ruoyi.manage.platform.domain.dto.AssetTransferDTO;
+import com.ruoyi.manage.platform.domain.vo.AssetInfoExportVO;
+import com.ruoyi.manage.platform.domain.vo.AssetStatisticsVO;
 import com.ruoyi.manage.platform.service.IAssetInfoService;
 import com.ruoyi.manage.platform.service.IAssetTransferRecordService;
 
@@ -58,8 +58,8 @@ public class AssetInfoController extends BaseController
     public void export(HttpServletResponse response, AssetInfo assetInfo)
     {
         List<AssetInfo> list = assetInfoService.selectAssetInfoList(assetInfo);
-        List<AssetInfoExport> exportList = list.stream().map(AssetInfoExport::new).collect(Collectors.toList());
-        ExcelUtil<AssetInfoExport> util = new ExcelUtil<AssetInfoExport>(AssetInfoExport.class);
+        List<AssetInfoExportVO> exportList = list.stream().map(AssetInfoExportVO::new).collect(Collectors.toList());
+        ExcelUtil<AssetInfoExportVO> util = new ExcelUtil<AssetInfoExportVO>(AssetInfoExportVO.class);
         util.exportExcel(response, exportList, "资产信息数据");
     }
 
@@ -182,7 +182,7 @@ public class AssetInfoController extends BaseController
     @GetMapping("/statistics")
     public AjaxResult statistics()
     {
-        AssetStatisticsDTO dto = assetInfoService.getAssetStatistics();
+        AssetStatisticsVO dto = assetInfoService.getAssetStatistics();
         return success(dto);
     }
 }

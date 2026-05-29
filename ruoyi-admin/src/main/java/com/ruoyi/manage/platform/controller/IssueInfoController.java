@@ -20,7 +20,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.manage.platform.domain.IssueInfo;
-import com.ruoyi.manage.platform.domain.IssueInfoExport;
+import com.ruoyi.manage.platform.domain.vo.IssueInfoExportVO;
 import com.ruoyi.manage.platform.service.IIssueInfoService;
 
 @RestController
@@ -45,8 +45,8 @@ public class IssueInfoController extends BaseController
     public void export(HttpServletResponse response, IssueInfo issueInfo)
     {
         List<IssueInfo> list = issueInfoService.selectIssueInfoList(issueInfo);
-        List<IssueInfoExport> exportList = list.stream().map(IssueInfoExport::new).collect(Collectors.toList());
-        ExcelUtil<IssueInfoExport> util = new ExcelUtil<IssueInfoExport>(IssueInfoExport.class);
+        List<IssueInfoExportVO> exportList = list.stream().map(IssueInfoExportVO::new).collect(Collectors.toList());
+        ExcelUtil<IssueInfoExportVO> util = new ExcelUtil<IssueInfoExportVO>(IssueInfoExportVO.class);
         util.exportExcel(response, exportList, "问题信息数据");
     }
 

@@ -145,6 +145,39 @@
 - 只有在表格列数超过可视区域、必须横向滚动时才使用 `fixed`，且此时必须同时设置 `:row-height` 保证行高统一。
 - 非固定列场景直接使用 `width` 或 `min-width`，让列跟随表格自然布局。
 
+## DTO / VO / Entity 分包与命名规范
+
+### 概念区分
+- **Entity（实体）**：对应数据库表，带 `@TableName` 注解，由 ORM（MyBatis-Plus）管理生命周期。放在 `domain/` 根包下。
+- **DTO（Data Transfer Object，数据传输对象）**：用于接收外部请求参数，从 Controller 层传入 Service 层。特征是 `@RequestBody` 绑定、入参校验。放在 `domain/dto/` 子包下，类名以 `DTO` 结尾。
+- **VO（View Object，视图对象）**：用于向外部返回数据，封装展示/导出/统计等出参数据。放在 `domain/vo/` 子包下，类名以 `VO` 结尾。
+
+### 分包结构
+```
+domain/
+├── XxxEntity.java          ← Entity，对应数据库表
+├── dto/
+│   ├── XxxReceiveDTO.java  ← 入参 DTO
+│   └── XxxQueryDTO.java    ← 查询 DTO
+└── vo/
+    ├── XxxStatisticsVO.java ← 统计 VO
+    └── XxxExportVO.java     ← 导出 VO
+```
+
+### 命名规则
+| 类型 | 包 | 命名 | 示例 |
+|------|------|------|------|
+| 实体 | `domain/` | `Xxx` | `AssetInfo` |
+| 入参 | `domain/dto/` | `XxxActionDTO` | `AssetReceiveDTO` |
+| 查询 | `domain/dto/` | `XxxQueryDTO` | `AssetInfoQueryDTO` |
+| 统计 | `domain/vo/` | `XxxStatisticsVO` | `AssetStatisticsVO` |
+| 导出 | `domain/vo/` | `XxxExportVO` | `AssetInfoExportVO` |
+
+### 禁止事项
+- 禁止将 DTO/VO 与 Entity 混放在 `domain/` 根包下
+- 禁止在 DTO 上使用 `@TableName` 等 ORM 注解
+- 禁止将 VO 命名为 `*DTO`，将 DTO 命名为 `*VO`
+
 ## 写完必提交Git
 
 每次写完后，必须执行：
