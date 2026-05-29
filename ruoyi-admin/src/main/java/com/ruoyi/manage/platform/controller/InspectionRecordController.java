@@ -25,6 +25,9 @@ import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.manage.platform.domain.InspectionRecord;
 import com.ruoyi.manage.platform.service.IInspectionRecordService;
 
+/**
+ * 点检记录控制器。
+ */
 @RestController
 @RequestMapping("/manage/platform/inspection/record")
 public class InspectionRecordController extends BaseController
@@ -81,6 +84,16 @@ public class InspectionRecordController extends BaseController
         return toAjax(inspectionRecordService.deleteInspectionRecordByRecordIds(recordIds));
     }
 
+    /**
+     * 导出点检记录 Word。
+     *
+     * @param response 响应对象
+     * @param recordIds 点检记录主键集合
+     * @param beginDateStr 开始日期字符串
+     * @param endDateStr 结束日期字符串
+     * @throws ParseException 日期解析异常
+     * @throws IOException io异常
+     */
     @PreAuthorize("@ss.hasPermi('manage:inspection:record:export')")
     @Log(title = "点检记录", businessType = BusinessType.EXPORT)
     @GetMapping("/export")
@@ -94,5 +107,31 @@ public class InspectionRecordController extends BaseController
         String fileName = "点检记录导出_" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
         response.setHeader("Content-Disposition", "attachment;filename=" + new String(fileName.getBytes("GBK"), "ISO-8859-1") + ".docx");
         inspectionRecordService.exportInspectionRecords(recordIds, beginDate, endDate, response.getOutputStream());
+    }
+
+    /**
+     * 导出点检记录 Excel。
+     * 保留原 Word 导出接口不变，避免影响已有调用方。
+     *
+     * @param response 响应对象
+     * @param recordIds 点检记录主键集合
+     * @param beginDateStr 开始日期字符串
+     * @param endDateStr 结束日期字符串
+     * @throws ParseException 日期解析异常
+     * @throws IOException io异常
+     */
+    @PreAuthorize("@ss.hasPermi('manage:inspection:record:export')")
+    @Log(title = "点检记录", businessType = BusinessType.EXPORT)
+    @GetMapping("/exportExcel")
+    public void exportExcel(HttpServletResponse response, Long[] recordIds, String beginDateStr, String endDateStr) throws ParseException, IOException
+    {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        Date beginDate = StringUtils.isNotEmpty(beginDateStr) ? sdf.parse(beginDateStr) : null;
+        Date endDate = StringUtils.isNotEmpty(endDateStr) ? sdf.parse(endDateStr) : null;
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding("utf-8");
+        String fileName = "点检记录导出_" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        response.setHeader("Content-Disposition", "attachment;filename=" + new String(fileName.getBytes("GBK"), "ISO-8859-1") + ".xlsx");
+        inspectionRecordService.exportInspectionRecordsExcel(recordIds, beginDate, endDate, response.getOutputStream());
     }
 }
