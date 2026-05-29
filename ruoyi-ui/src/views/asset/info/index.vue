@@ -124,15 +124,11 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="opt-cell" width="370" fixed="right">
+      <el-table-column label="操作" align="center" width="200">
         <template slot-scope="scope">
           <el-button size="mini" type="text" icon="el-icon-view" @click="handleDetail(scope.row)" v-hasPermi="['manage:asset:list']">详情</el-button>
           <el-button size="mini" type="text" icon="el-icon-edit" @click="handleUpdate(scope.row)" v-hasPermi="['manage:asset:edit']">修改</el-button>
           <el-button size="mini" type="text" icon="el-icon-s-order" @click="handleTransferHistory(scope.row)" v-hasPermi="['manage:asset:edit']">流转</el-button>
-          <el-button v-if="scope.row.assetStatus === 'IN_STOCK'" size="mini" type="text" icon="el-icon-check" @click="handleTransferAction('receive', scope.row)" v-hasPermi="['manage:asset:edit']">领用</el-button>
-          <el-button v-if="scope.row.assetStatus === 'IN_USE'" size="mini" type="text" icon="el-icon-refresh-left" @click="handleTransferAction('return', scope.row)" v-hasPermi="['manage:asset:edit']">归还</el-button>
-          <el-button v-if="scope.row.assetStatus === 'IN_USE'" size="mini" type="text" icon="el-icon-sort" @click="handleTransferAction('transfer', scope.row)" v-hasPermi="['manage:asset:edit']">调拨</el-button>
-          <el-button v-if="scope.row.assetStatus !== 'SCRAPPED'" size="mini" type="text" icon="el-icon-close" @click="handleTransferAction('scrap', scope.row)" v-hasPermi="['manage:asset:edit']">报废</el-button>
           <el-button size="mini" type="text" icon="el-icon-delete" @click="handleDelete(scope.row)" v-hasPermi="['manage:asset:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -714,14 +710,6 @@ export default {
 }
 .search-actions .el-button + .el-button {
   margin-left: 8px;
-}
-
-.opt-cell {
-  white-space: nowrap;
-}
-.opt-cell .el-button--text {
-  padding-left: 4px;
-  padding-right: 4px;
 }
 
 .detail-row {
