@@ -1,5 +1,7 @@
 package com.ruoyi.manage.platform.service.impl;
 
+import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -8,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,14 +85,45 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
     @Override
     public int insertAssetInfo(AssetInfo assetInfo)
     {
-        validateAssetUniqueness(assetInfo, false);
-        validateAssetStatusConsistency(assetInfo);
         if (StringUtils.isEmpty(assetInfo.getAssetName()))
         {
             throw new ServiceException("资产名称不能为空");
         }
-        assetInfo.setCreateTime(DateUtils.getNowDate());
-        return save(assetInfo) ? 1 : 0;
+        assetInfo.setQuantity(BigDecimal.ONE);
+        int batchCount = (assetInfo.getBatchCount() != null && assetInfo.getBatchCount() > 1) ? assetInfo.getBatchCount() : 1;
+        if (batchCount > 50)
+        {
+            throw new ServiceException("单次批量创建不能超过50条");
+        }
+        boolean isBatch = batchCount > 1;
+        String baseNo = StringUtils.isNotEmpty(assetInfo.getAssetNo())
+            ? assetInfo.getAssetNo()
+            : "AUTO-" + new SimpleDateFormat("yyyyMMddHHmmss").format(DateUtils.getNowDate()) + "-";
+        int digitLen = String.valueOf(batchCount).length();
+        Date now = DateUtils.getNowDate();
+        int saved = 0;
+        for (int i = 1; i <= batchCount; i++)
+        {
+            AssetInfo item = new AssetInfo();
+            BeanUtils.copyProperties(assetInfo, item);
+            item.setAssetId(null);
+            item.setAssetNo(isBatch ? baseNo + String.format("%0" + digitLen + "d", i) : assetInfo.getAssetNo());
+            item.setQuantity(BigDecimal.ONE);
+            item.setBatchCount(null);
+            item.setCreateTime(now);
+            if (isBatch)
+            {
+                item.setDeviceNo("");
+                item.setFinanceAccountNo("");
+            }
+            validateAssetUniqueness(item, false);
+            validateAssetStatusConsistency(item);
+            if (save(item))
+            {
+                saved++;
+            }
+        }
+        return saved;
     }
 
     @Override
@@ -105,6 +139,7 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
         {
             throw new ServiceException("资产名称不能为空");
         }
+        assetInfo.setQuantity(BigDecimal.ONE);
         assetInfo.setUpdateTime(DateUtils.getNowDate());
         return updateById(assetInfo) ? 1 : 0;
     }

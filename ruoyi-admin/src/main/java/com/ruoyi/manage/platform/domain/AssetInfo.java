@@ -65,6 +65,10 @@ public class AssetInfo extends BaseEntity
     @Excel(name = "使用人")
     private String userName;
 
+    /** 批量创建数量，非数据库字段，仅用于接收请求参数 */
+    @TableField(exist = false)
+    private Integer batchCount;
+
     public Long getAssetId()
     {
         return assetId;
@@ -223,6 +227,16 @@ public class AssetInfo extends BaseEntity
     public void setUserName(String userName)
     {
         this.userName = userName;
+    }
+
+    public Integer getBatchCount()
+    {
+        return batchCount;
+    }
+
+    public void setBatchCount(Integer batchCount)
+    {
+        this.batchCount = batchCount;
     }
 
     @Override

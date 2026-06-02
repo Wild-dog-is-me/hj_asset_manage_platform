@@ -115,7 +115,6 @@
       <el-table-column label="资产名称" align="center" prop="assetName" min-width="140" :show-overflow-tooltip="true" />
       <el-table-column label="型号" align="center" prop="model" width="130" :show-overflow-tooltip="true" />
       <el-table-column label="单位" align="center" prop="unit" width="80" />
-      <el-table-column label="数量" align="center" prop="quantity" width="90" />
       <el-table-column label="使用部门" align="center" prop="deptName" width="140" :show-overflow-tooltip="true" />
       <el-table-column label="成本中心" align="center" prop="costCenter" width="130" :show-overflow-tooltip="true" />
       <el-table-column label="使用人" align="center" prop="userName" width="100" />
@@ -124,10 +123,11 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" width="200" fixed="right">
+      <el-table-column label="操作" align="center" width="240">
         <template slot-scope="scope">
           <el-button size="mini" type="text" icon="el-icon-view" @click="handleDetail(scope.row)" v-hasPermi="['manage:asset:list']">详情</el-button>
           <el-button size="mini" type="text" icon="el-icon-edit" @click="handleUpdate(scope.row)" v-hasPermi="['manage:asset:edit']">修改</el-button>
+          <el-button size="mini" type="text" icon="el-icon-document-copy" @click="handleCopy(scope.row)" v-hasPermi="['manage:asset:add']">复制</el-button>
           <el-button size="mini" type="text" icon="el-icon-delete" @click="handleDelete(scope.row)" v-hasPermi="['manage:asset:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -205,18 +205,18 @@
           </el-col>
         </el-row>
         <el-row>
-          <el-col :span="12">
-            <el-form-item label="数量" prop="quantity">
-              <el-input-number v-model="form.quantity" controls-position="right" :min="0" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
+          <el-col v-if="form.assetId" :span="12">
             <el-form-item label="使用部门">
               <el-input :value="form.deptName || '-'" disabled />
             </el-form-item>
           </el-col>
+          <el-col v-else :span="12">
+            <el-form-item label="批量数量">
+              <el-input-number v-model="form.batchCount" controls-position="right" :min="1" :max="50" :precision="0" placeholder="不填则创建1条" style="width: 100%" />
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-row>
+        <el-row v-if="form.assetId">
           <el-col :span="12">
             <el-form-item label="成本中心">
               <el-input :value="form.costCenter || '-'" disabled />
@@ -263,16 +263,15 @@
           </el-row>
           <el-row :gutter="20" class="detail-row">
             <el-col :span="8"><span class="detail-label">单位</span><span class="detail-value">{{ detailAsset.unit || '-' }}</span></el-col>
-            <el-col :span="8"><span class="detail-label">数量</span><span class="detail-value">{{ detailAsset.quantity || '-' }}</span></el-col>
             <el-col :span="8"><span class="detail-label">使用部门</span><span class="detail-value">{{ detailAsset.deptName || '-' }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">成本中心</span><span class="detail-value">{{ detailAsset.costCenter || '-' }}</span></el-col>
           </el-row>
           <el-row :gutter="20" class="detail-row">
-            <el-col :span="8"><span class="detail-label">成本中心</span><span class="detail-value">{{ detailAsset.costCenter || '-' }}</span></el-col>
             <el-col :span="8"><span class="detail-label">使用人</span><span class="detail-value">{{ detailAsset.userName || '-' }}</span></el-col>
             <el-col :span="8"><span class="detail-label">创建时间</span><span class="detail-value">{{ parseTime(detailAsset.createTime) }}</span></el-col>
+            <el-col :span="8"><span class="detail-label">更新时间</span><span class="detail-value">{{ parseTime(detailAsset.updateTime) }}</span></el-col>
           </el-row>
           <el-row :gutter="20" class="detail-row">
-            <el-col :span="8"><span class="detail-label">更新时间</span><span class="detail-value">{{ parseTime(detailAsset.updateTime) }}</span></el-col>
             <el-col :span="16"><span class="detail-label">备注</span><span class="detail-value">{{ detailAsset.remark || '-' }}</span></el-col>
           </el-row>
           <div v-if="detailAsset.assetStatus !== 'SCRAPPED'" class="detail-actions">
@@ -432,8 +431,7 @@ export default {
         assetCategory: [{ required: true, message: "资产类别不能为空", trigger: "change" }],
         deviceType: [{ required: true, message: "设备类别不能为空", trigger: "change" }],
         assetNo: [{ required: true, message: "资产编号不能为空", trigger: "blur" }],
-        assetName: [{ required: true, message: "资产名称不能为空", trigger: "blur" }],
-        quantity: [{ required: true, message: "数量不能为空", trigger: "blur" }]
+        assetName: [{ required: true, message: "资产名称不能为空", trigger: "blur" }]
       },
       transferOpen: false,
       transferTitle: "",
@@ -507,6 +505,7 @@ export default {
         model: undefined,
         unit: "",
         quantity: 1,
+        batchCount: undefined,
         deptId: undefined,
         costCenter: undefined,
         userName: undefined,
@@ -574,6 +573,26 @@ export default {
       this.download('manage/platform/asset/export', {
         ...this.queryParams
       }, `asset_info_${new Date().getTime()}.xlsx`)
+    },
+    handleCopy(row) {
+      this.reset()
+      getAssetInfo(row.assetId).then(response => {
+        const src = response.data
+        this.form.accountSet = src.accountSet
+        this.form.assetCategory = src.assetCategory
+        this.form.assetStatus = 'IN_STOCK'
+        this.form.deviceType = src.deviceType
+        this.form.assetNo = (src.assetNo || '') + '-'
+        this.form.deviceNo = ''
+        this.form.financeAccountNo = ''
+        this.form.assetName = src.assetName
+        this.form.model = src.model
+        this.form.unit = src.unit
+        this.form.remark = ''
+        this.form.batchCount = undefined
+        this.open = true
+        this.title = '添加资产信息'
+      })
     },
     handleDetail(row) {
       this.detailAsset = {}
