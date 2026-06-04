@@ -113,8 +113,8 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
             item.setCreateTime(now);
             if (isBatch)
             {
-                item.setDeviceNo("");
-                item.setFinanceAccountNo("");
+                item.setDeviceNo(null);
+                item.setFinanceAccountNo(null);
             }
             validateAssetUniqueness(item, false);
             validateAssetStatusConsistency(item);

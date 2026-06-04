@@ -123,11 +123,10 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" width="240">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="180" fixed="right">
         <template slot-scope="scope">
           <el-button size="mini" type="text" icon="el-icon-view" @click="handleDetail(scope.row)" v-hasPermi="['manage:asset:list']">详情</el-button>
           <el-button size="mini" type="text" icon="el-icon-edit" @click="handleUpdate(scope.row)" v-hasPermi="['manage:asset:edit']">修改</el-button>
-          <el-button size="mini" type="text" icon="el-icon-document-copy" @click="handleCopy(scope.row)" v-hasPermi="['manage:asset:add']">复制</el-button>
           <el-button size="mini" type="text" icon="el-icon-delete" @click="handleDelete(scope.row)" v-hasPermi="['manage:asset:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -275,6 +274,7 @@
             <el-col :span="16"><span class="detail-label">备注</span><span class="detail-value">{{ detailAsset.remark || '-' }}</span></el-col>
           </el-row>
           <div v-if="detailAsset.assetStatus !== 'SCRAPPED'" class="detail-actions">
+            <el-button type="info" size="small" icon="el-icon-document-copy" @click="detailOpen = false; handleCopy(detailAsset)">复制</el-button>
             <el-button v-if="detailAsset.assetStatus === 'IN_STOCK'" type="primary" size="small" icon="el-icon-check" @click="handleTransferAction('receive', detailAsset); detailTransferRefresh = true">领用</el-button>
             <el-button v-if="detailAsset.assetStatus === 'IN_USE'" type="success" size="small" icon="el-icon-refresh-left" @click="handleTransferAction('return', detailAsset); detailTransferRefresh = true">归还</el-button>
             <el-button v-if="detailAsset.assetStatus === 'IN_USE'" type="warning" size="small" icon="el-icon-sort" @click="handleTransferAction('transfer', detailAsset); detailTransferRefresh = true">调拨</el-button>
@@ -583,8 +583,8 @@ export default {
         this.form.assetStatus = 'IN_STOCK'
         this.form.deviceType = src.deviceType
         this.form.assetNo = (src.assetNo || '') + '-'
-        this.form.deviceNo = ''
-        this.form.financeAccountNo = ''
+        this.form.deviceNo = undefined
+        this.form.financeAccountNo = undefined
         this.form.assetName = src.assetName
         this.form.model = src.model
         this.form.unit = src.unit
