@@ -114,7 +114,6 @@
       </el-table-column>
       <el-table-column label="资产名称" align="center" prop="assetName" min-width="140" :show-overflow-tooltip="true" />
       <el-table-column label="型号" align="center" prop="model" width="130" :show-overflow-tooltip="true" />
-      <el-table-column label="单位" align="center" prop="unit" width="80" />
       <el-table-column label="使用部门" align="center" prop="deptName" width="140" :show-overflow-tooltip="true" />
       <el-table-column label="成本中心" align="center" prop="costCenter" width="130" :show-overflow-tooltip="true" />
       <el-table-column label="使用人" align="center" prop="userName" width="100" />
@@ -197,11 +196,6 @@
               <el-input v-model="form.model" placeholder="请输入型号" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="单位" prop="unit">
-              <el-input v-model="form.unit" placeholder="请输入单位" />
-            </el-form-item>
-          </el-col>
         </el-row>
         <el-row>
           <el-col v-if="form.assetId" :span="12">
@@ -261,7 +255,6 @@
             <el-col :span="8"><span class="detail-label">型号</span><span class="detail-value">{{ detailAsset.model || '-' }}</span></el-col>
           </el-row>
           <el-row :gutter="20" class="detail-row">
-            <el-col :span="8"><span class="detail-label">单位</span><span class="detail-value">{{ detailAsset.unit || '-' }}</span></el-col>
             <el-col :span="8"><span class="detail-label">使用部门</span><span class="detail-value">{{ detailAsset.deptName || '-' }}</span></el-col>
             <el-col :span="8"><span class="detail-label">成本中心</span><span class="detail-value">{{ detailAsset.costCenter || '-' }}</span></el-col>
           </el-row>
@@ -503,7 +496,7 @@ export default {
         deviceType: undefined,
         assetName: undefined,
         model: undefined,
-        unit: "",
+        unit: undefined,
         quantity: 1,
         batchCount: undefined,
         deptId: undefined,
@@ -561,8 +554,7 @@ export default {
     },
     handleDelete(row) {
       const assetIds = row.assetId || this.ids
-      const assetLabel = row.assetNo || row.assetId
-      this.$modal.confirm('是否确认删除资产"' + assetLabel + '"？').then(function() {
+      this.$modal.confirm('是否确认删除该资产？').then(function() {
         return delAssetInfo(assetIds)
       }).then(() => {
         this.getList()
@@ -587,7 +579,6 @@ export default {
         this.form.financeAccountNo = undefined
         this.form.assetName = src.assetName
         this.form.model = src.model
-        this.form.unit = src.unit
         this.form.remark = ''
         this.form.batchCount = undefined
         this.open = true

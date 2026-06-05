@@ -90,6 +90,7 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
             throw new ServiceException("资产名称不能为空");
         }
         assetInfo.setQuantity(BigDecimal.ONE);
+        assetInfo.setUnit(null);
         int batchCount = (assetInfo.getBatchCount() != null && assetInfo.getBatchCount() > 1) ? assetInfo.getBatchCount() : 1;
         if (batchCount > 50)
         {
@@ -109,6 +110,7 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
             item.setAssetId(null);
             item.setAssetNo(isBatch ? baseNo + String.format("%0" + digitLen + "d", i) : assetInfo.getAssetNo());
             item.setQuantity(BigDecimal.ONE);
+            item.setUnit(null);
             item.setBatchCount(null);
             item.setCreateTime(now);
             if (isBatch)
@@ -140,6 +142,7 @@ public class AssetInfoServiceImpl extends ServiceImpl<AssetInfoMapper, AssetInfo
             throw new ServiceException("资产名称不能为空");
         }
         assetInfo.setQuantity(BigDecimal.ONE);
+        assetInfo.setUnit(null);
         assetInfo.setUpdateTime(DateUtils.getNowDate());
         return updateById(assetInfo) ? 1 : 0;
     }
