@@ -198,7 +198,7 @@ public class DbInstanceServiceImpl extends ServiceImpl<DbInstanceMapper, DbInsta
         }
         catch (Exception e)
         {
-            throw new ServiceException("密码加密失败", e);
+            throw new ServiceException("密码加密失败");
         }
     }
 
@@ -217,7 +217,7 @@ public class DbInstanceServiceImpl extends ServiceImpl<DbInstanceMapper, DbInsta
         }
         catch (Exception e)
         {
-            throw new ServiceException("密码解密失败", e);
+            throw new ServiceException("密码解密失败");
         }
     }
 
