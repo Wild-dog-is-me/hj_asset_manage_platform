@@ -167,6 +167,34 @@ export const dynamicRoutes = [
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
       }
     ]
+  },
+  {
+    path: '/monitor/database',
+    component: Layout,
+    hidden: true,
+    permissions: ['monitor:db:list'],
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/monitor/database/index'),
+        name: 'DbMonitor',
+        meta: { title: '数据库监控', activeMenu: '/monitor/database' }
+      }
+    ]
+  },
+  {
+    path: '/monitor/database-config',
+    component: Layout,
+    hidden: true,
+    permissions: ['monitor:db:config'],
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/monitor/database/config'),
+        name: 'DbConfig',
+        meta: { title: '实例配置', activeMenu: '/monitor/database' }
+      }
+    ]
   }
 ]
 

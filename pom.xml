@@ -191,6 +191,20 @@
                 <version>${lombok.version}</version>
             </dependency>
 
+            <!-- Redis客户端 -->
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>5.2.0</version>
+            </dependency>
+
+            <!-- SQL Server JDBC驱动 -->
+            <dependency>
+                <groupId>com.microsoft.sqlserver</groupId>
+                <artifactId>mssql-jdbc</artifactId>
+                <version>12.10.0.jre11</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
