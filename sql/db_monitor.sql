@@ -62,7 +62,10 @@ insert into sys_dict_data(dict_sort, dict_label, dict_value, dict_type, is_defau
 values(2, 'SQL Server', 'SQLSERVER', 'db_monitor_db_type',   'N', '0', 'admin', sysdate(), 'SQL Server 数据库');
 
 insert into sys_dict_data(dict_sort, dict_label, dict_value, dict_type, is_default, status, create_by, create_time, remark)
-values(3, 'Redis',      'REDIS',     'db_monitor_db_type',   'N', '0', 'admin', sysdate(), 'Redis 缓存');
+values(3, 'Redis',       'REDIS',       'db_monitor_db_type',   'N', '0', 'admin', sysdate(), 'Redis 缓存');
+
+insert into sys_dict_data(dict_sort, dict_label, dict_value, dict_type, is_default, status, create_by, create_time, remark)
+values(4, 'PostgreSQL',  'POSTGRESQL',  'db_monitor_db_type',   'N', '0', 'admin', sysdate(), 'PostgreSQL 数据库');
 
 -- 字典数据: 实例状态
 insert into sys_dict_data(dict_sort, dict_label, dict_value, dict_type, css_class, is_default, status, create_by, create_time, remark)

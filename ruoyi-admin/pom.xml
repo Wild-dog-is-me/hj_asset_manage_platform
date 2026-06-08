@@ -48,6 +48,12 @@
             <artifactId>mssql-jdbc</artifactId>
         </dependency>
 
+        <!-- PostgreSQL JDBC驱动 -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+
         <!-- 核心模块-->
         <dependency>
             <groupId>com.ruoyi</groupId>

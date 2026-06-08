@@ -90,7 +90,7 @@
     <pagination v-show="total>0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize" @pagination="getList" />
 
     <!-- 新增/修改弹窗 -->
-    <el-dialog :title="title" :visible.sync="open" width="600px" append-to-body>
+    <el-dialog :title="title" :visible.sync="open" width="900px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="110px">
         <el-row>
           <el-col :span="24">
@@ -298,6 +298,7 @@ export default {
       }
       if (val === 'MYSQL' && !this.form.port) this.form.port = 3306
       if (val === 'SQLSERVER' && !this.form.port) this.form.port = 1433
+      if (val === 'POSTGRESQL' && !this.form.port) this.form.port = 5432
       if (val === 'REDIS' && !this.form.port) this.form.port = 6379
     }
   }

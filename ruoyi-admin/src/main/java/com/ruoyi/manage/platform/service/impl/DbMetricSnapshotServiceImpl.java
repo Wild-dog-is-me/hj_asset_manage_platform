@@ -49,6 +49,10 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             return new SqlServerCollector().collect(instance);
         }
+        else if ("POSTGRESQL".equalsIgnoreCase(dbType))
+        {
+            return new PostgreSqlCollector().collect(instance);
+        }
         else if ("REDIS".equalsIgnoreCase(dbType))
         {
             return new RedisCollector().collect(instance);
@@ -497,6 +501,184 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
             Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
+        }
+    }
+
+    // ==================== PostgreSQL 采集器 ====================
+
+    private static class PostgreSqlCollector
+    {
+        Map<String, Object> collect(DbInstance instance)
+        {
+            Map<String, Object> result = new LinkedHashMap<>();
+            Map<String, Object> extra = new LinkedHashMap<>();
+            result.put("extraJson", extra);
+
+            try (Connection conn = getPostgreSqlConnection(instance))
+            {
+                result.put("isAlive", true);
+
+                // 版本和启动时间
+                try (PreparedStatement ps = conn.prepareStatement("SELECT version(), pg_postmaster_start_time()"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) { extra.put("version", rs.getString(1)); extra.put("startTime", rs.getString(2)); }
+                    rs.close();
+                }
+
+                // 连接数
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT numbackends, (SELECT setting::int FROM pg_settings WHERE name='max_connections') AS maxconn FROM pg_stat_database WHERE datname=current_database()"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) {
+                        result.put("connections", rs.getInt("numbackends"));
+                        result.put("maxConnections", rs.getInt("maxconn"));
+                    }
+                    rs.close();
+                }
+
+                // 慢查询（pg_stat_statements扩展）, 运行时计数器, 用 committed queries per second 近似
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT xact_commit + xact_rollback AS total_tx FROM pg_stat_database WHERE datname = current_database()"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) {
+                        long totalTx = rs.getLong("total_tx");
+                        // 近似QPS用事务数代替
+                        result.put("qps", BigDecimal.valueOf(totalTx));
+                    }
+                    rs.close();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) extra.put("deadlocks", rs.getInt("deadlocks"));
+                    rs.close();
+                }
+
+                // 慢查询列表（从pg_stat_statements）
+                List<Map<String, Object>> slowSqlList = getPgSlowQueries(conn);
+                result.put("slowQueries", slowSqlList.size());
+                extra.put("slowSqlList", slowSqlList);
+
+                // 缓存命中率：从pg_stat_bgwriter或pg_stat_io(PostgreSQL 16+)
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT CASE WHEN blks_hit + blks_read > 0 THEN round(100.0 * blks_hit / (blks_hit + blks_read), 2) ELSE 100 END " +
+                    "FROM pg_stat_database WHERE datname = current_database()"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) result.put("cacheHitRatio", rs.getBigDecimal(1));
+                    rs.close();
+                }
+                catch (Exception ignored) { result.put("cacheHitRatio", BigDecimal.valueOf(100)); }
+
+                result.put("memoryUsedPct", BigDecimal.ZERO);
+
+                // 锁等待数
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT COUNT(*) FROM pg_locks WHERE NOT granted"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) extra.put("lockWaits", rs.getInt(1));
+                    rs.close();
+                }
+                catch (Exception ignored) { extra.put("lockWaits", -1); }
+
+                // 长事务（超过60秒）
+                List<Map<String, Object>> longTrx = new ArrayList<>();
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT pid, usename, application_name, state, " +
+                    "EXTRACT(EPOCH FROM (now() - xact_start))::int AS duration_sec, query " +
+                    "FROM pg_stat_activity WHERE state = 'active' AND xact_start IS NOT NULL " +
+                    "AND EXTRACT(EPOCH FROM (now() - xact_start)) > 60 ORDER BY xact_start"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    while (rs.next())
+                    {
+                        Map<String, Object> trx = new LinkedHashMap<>();
+                        trx.put("pid", rs.getInt("pid"));
+                        trx.put("user", rs.getString("usename"));
+                        trx.put("app", rs.getString("application_name"));
+                        trx.put("state", rs.getString("state"));
+                        trx.put("durationSec", rs.getInt("duration_sec"));
+                        trx.put("query", rs.getString("query"));
+                        longTrx.add(trx);
+                    }
+                    rs.close();
+                }
+                catch (Exception ignored) {}
+                extra.put("longTransactions", longTrx);
+                extra.put("longTransactionCount", longTrx.size());
+
+                // 表空间统计
+                List<Map<String, Object>> tableSizes = new ArrayList<>();
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT relname AS table_name, n_live_tup AS row_count, " +
+                    "pg_size_pretty(pg_total_relation_size(relid)) AS total_size, " +
+                    "pg_total_relation_size(relid) AS total_bytes " +
+                    "FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 20"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    while (rs.next())
+                    {
+                        Map<String, Object> t = new LinkedHashMap<>();
+                        t.put("tableName", rs.getString("table_name"));
+                        t.put("tableRows", rs.getLong("row_count"));
+                        t.put("totalSize", rs.getString("total_size"));
+                        t.put("totalBytes", rs.getLong("total_bytes"));
+                        tableSizes.add(t);
+                    }
+                    rs.close();
+                }
+                catch (Exception ignored) {}
+                extra.put("tableSizes", tableSizes);
+
+                // 异常连接数
+                extra.put("abortedConnects", "N/A (pg_stat_database 不含此指标)");
+            }
+            catch (Exception e)
+            {
+                result.put("isAlive", false);
+                extra.put("error", e.getMessage());
+            }
+            return result;
+        }
+
+        private Connection getPostgreSqlConnection(DbInstance instance) throws Exception
+        {
+            String url = "jdbc:postgresql://" + instance.getHost() + ":" + instance.getPort()
+                + "/" + (StringUtils.isNotEmpty(instance.getDbName()) ? instance.getDbName() : "postgres")
+                + "?connectTimeout=5&socketTimeout=10";
+            Class.forName("org.postgresql.Driver");
+            return DriverManager.getConnection(url, instance.getUsername(),
+                StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
+        }
+
+        private List<Map<String, Object>> getPgSlowQueries(Connection conn)
+        {
+            List<Map<String, Object>> list = new ArrayList<>();
+            // pg_stat_statements 需要超级用户启用扩展，容错处理
+            try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT query, calls, mean_exec_time, total_exec_time, rows " +
+                "FROM pg_stat_statements WHERE query NOT LIKE '%pg_stat%' ORDER BY mean_exec_time DESC LIMIT 20"))
+            {
+                ResultSet rs = ps.executeQuery();
+                while (rs.next())
+                {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("sqlText", rs.getString("query"));
+                    row.put("execCount", rs.getLong("calls"));
+                    row.put("avgSec", rs.getBigDecimal("mean_exec_time").divide(new BigDecimal(1000), 2, java.math.RoundingMode.HALF_UP));
+                    row.put("totalSec", rs.getBigDecimal("total_exec_time").divide(new BigDecimal(1000), 2, java.math.RoundingMode.HALF_UP));
+                    row.put("rowsExamined", rs.getLong("rows"));
+                    list.add(row);
+                }
+                rs.close();
+            }
+            catch (Exception ignored) {}
+            return list;
         }
     }
 

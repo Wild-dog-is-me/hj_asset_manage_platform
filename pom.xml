@@ -205,6 +205,13 @@
                 <version>12.10.0.jre11</version>
             </dependency>
 
+            <!-- PostgreSQL JDBC驱动 -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>42.7.4</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
