@@ -326,7 +326,7 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             String url = "jdbc:mysql://" + instance.getHost() + ":" + instance.getPort()
                 + "/" + (StringUtils.isNotEmpty(instance.getDbName()) ? instance.getDbName() : "")
-                + "?useSSL=false&connectTimeout=5000&socketTimeout=10000";
+                + "?useSSL=false&connectTimeout=5000&socketTimeout=30000";
             Class.forName("com.mysql.cj.jdbc.Driver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
@@ -497,7 +497,7 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             String url = "jdbc:sqlserver://" + instance.getHost() + ":" + instance.getPort()
                 + (StringUtils.isNotEmpty(instance.getDbName()) ? ";databaseName=" + instance.getDbName() : "")
-                + ";encrypt=false;loginTimeout=5;socketTimeout=10";
+                + ";encrypt=false;loginTimeout=5;socketTimeout=30";
             Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
@@ -650,7 +650,7 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             String url = "jdbc:postgresql://" + instance.getHost() + ":" + instance.getPort()
                 + "/" + (StringUtils.isNotEmpty(instance.getDbName()) ? instance.getDbName() : "postgres")
-                + "?connectTimeout=5&socketTimeout=10";
+                + "?connectTimeout=5&socketTimeout=30";
             Class.forName("org.postgresql.Driver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
