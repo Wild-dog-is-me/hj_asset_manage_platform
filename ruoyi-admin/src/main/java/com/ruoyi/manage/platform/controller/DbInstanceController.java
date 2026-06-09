@@ -96,8 +96,8 @@ public class DbInstanceController extends BaseController
     {
         DbInstance dbInstance = new DbInstance();
         dbInstance.setInstanceId(instanceId);
-        boolean ok = dbInstanceService.testConnection(dbInstance);
-        return ok ? success("连接成功") : error("连接失败，请检查网络、端口、用户名和密码");
+        String errorMessage = dbInstanceService.testConnection(dbInstance);
+        return errorMessage == null ? success("连接成功") : error(errorMessage);
     }
 
     /**
@@ -107,7 +107,7 @@ public class DbInstanceController extends BaseController
     @PostMapping("/testForm")
     public AjaxResult testFormConnection(@RequestBody DbInstance dbInstance)
     {
-        boolean ok = dbInstanceService.testConnection(dbInstance);
-        return ok ? success("连接成功") : error("连接失败，请检查网络、端口、用户名和密码");
+        String errorMessage = dbInstanceService.testConnection(dbInstance);
+        return errorMessage == null ? success("连接成功") : error(errorMessage);
     }
 }

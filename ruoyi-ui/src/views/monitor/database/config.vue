@@ -277,8 +277,8 @@ export default {
     handleTestConn(row) {
       testDbConnection(row.instanceId).then(() => {
         this.$modal.msgSuccess(row.instanceName + ' 连接成功')
-      }).catch(() => {
-        this.$modal.msgError('连接失败，请检查网络、端口、用户名和密码')
+      }).catch(error => {
+        this.$modal.msgError((error && (error.msg || error.message)) || '连接失败，请检查网络、端口、用户名和密码')
       })
     },
     handleTestFormConn() {
@@ -288,8 +288,8 @@ export default {
       }
       testDbFormConnection(this.form).then(() => {
         this.$modal.msgSuccess('连接成功')
-      }).catch(() => {
-        this.$modal.msgError('连接失败')
+      }).catch(error => {
+        this.$modal.msgError((error && (error.msg || error.message)) || '连接失败')
       })
     },
     onDbTypeChange(val) {

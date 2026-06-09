@@ -36,9 +36,10 @@ public interface IDbInstanceService extends IService<DbInstance>
 
     /**
      * 测试数据库连接。
-     * @return 是否连接成功
+     *
+     * @return 连接成功返回 null，失败返回脱敏后的错误原因
      */
-    public boolean testConnection(DbInstance dbInstance);
+    public String testConnection(DbInstance dbInstance);
 
     /**
      * 获取所有启用的实例。

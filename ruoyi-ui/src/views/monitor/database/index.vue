@@ -82,6 +82,16 @@
         </el-col>
       </el-row>
 
+      <!-- 指标采集提示 -->
+      <el-alert
+        v-if="metricWarnings.length > 0"
+        :title="metricWarnings.join('；')"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="metric-warning"
+      />
+
       <!-- 慢SQL列表 -->
       <el-card shadow="never" class="table-card">
         <div slot="header" class="chart-header"><span>慢SQL列表 TOP20</span></div>
@@ -89,11 +99,19 @@
           <el-table-column label="执行次数" prop="execCount" width="90" align="center" />
           <el-table-column label="平均耗时(秒)" prop="avgSec" width="120" align="center">
             <template slot-scope="scope">
-              <span :style="{ color: scope.row.avgSec > 5 ? '#f56c6c' : scope.row.avgSec > 1 ? '#e6a23c' : '' }">{{ scope.row.avgSec }}</span>
+              <span :style="{ color: Number(scope.row.avgSec || 0) > 5 ? '#f56c6c' : Number(scope.row.avgSec || 0) > 1 ? '#e6a23c' : '' }">{{ formatSeconds(scope.row.avgSec) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="总耗时(秒)" prop="totalSec" width="120" align="center">
+            <template slot-scope="scope">{{ formatSeconds(scope.row.totalSec) }}</template>
+          </el-table-column>
           <el-table-column label="扫描行数" prop="rowsExamined" width="100" align="center" />
-          <el-table-column label="SQL 摘要" prop="sqlText" min-width="300" :show-overflow-tooltip="true" />
+          <el-table-column label="SQL 摘要" prop="sqlText" min-width="300">
+            <template slot-scope="scope">
+              <span>{{ formatSqlSummary(scope.row.sqlText) }}</span>
+              <el-button type="text" size="mini" class="sql-detail-btn" @click="showFullSql(scope.row.sqlText)">查看完整SQL</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-card>
 
@@ -179,6 +197,16 @@
           </el-collapse-item>
         </el-collapse>
       </el-card>
+      <!-- 完整SQL查看 -->
+      <el-dialog title="完整 SQL" :visible.sync="sqlDialogOpen" width="70%" append-to-body>
+        <el-input
+          :value="currentSqlText"
+          type="textarea"
+          :rows="16"
+          readonly
+          class="sql-full-text"
+        />
+      </el-dialog>
     </template>
   </div>
 </template>
@@ -197,10 +225,13 @@ export default {
       selectedInstanceIds: [],
       autoRefresh: true,
       refreshTimer: null,
+      refreshing: false,
       lastRefreshTime: '',
       metricsCache: {},
       slowSqlData: [],
       slowSqlLoading: false,
+      sqlDialogOpen: false,
+      currentSqlText: '',
       connChart: null,
       qpsChart: null,
       historyData: {}
@@ -240,6 +271,18 @@ export default {
           cacheHitRatio: m ? (m.cacheHitRatio || 0) : 0
         }
       })
+    },
+    metricWarnings() {
+      const warnings = []
+      this.selectedInstanceIds.forEach(id => {
+        const inst = this.instanceList.find(i => i.instanceId === id) || {}
+        const extra = (this.metricsCache[id] && this.metricsCache[id].extraJson) || {}
+        if (extra.error) warnings.push((inst.instanceName || id) + ' 连接异常：' + extra.error)
+        if (extra.slowSqlError) warnings.push((inst.instanceName || id) + ' 慢SQL采集失败：' + extra.slowSqlError)
+        if (extra.qpsError) warnings.push((inst.instanceName || id) + ' QPS采集失败：' + extra.qpsError)
+        if (extra.cacheHitRatioError) warnings.push((inst.instanceName || id) + ' 缓存命中率采集失败：' + extra.cacheHitRatioError)
+      })
+      return warnings
     },
     hasTypeSpecificData() {
       return this.showMysqlExtra || this.showSqlserverExtra || this.showRedisExtra
@@ -318,41 +361,54 @@ export default {
     },
     /** 刷新所有选中实例 */
     async refreshAll() {
-      if (this.selectedInstanceIds.length === 0) return
+      if (this.selectedInstanceIds.length === 0 || this.refreshing) return
+      this.refreshing = true
       const now = new Date()
       this.lastRefreshTime = now.toLocaleTimeString()
-      const promises = this.selectedInstanceIds.map(id =>
-        collectMetrics(id).then(res => ({ id, data: res.data })).catch(() => ({ id, data: null }))
-      )
-      const results = await Promise.all(promises)
-      results.forEach(({ id, data }) => {
-        if (data) {
-          this.metricsCache[id] = data
-          // 收集慢SQL
-          if (data.extraJson && data.extraJson.slowSqlList) {
-            this.slowSqlData = data.extraJson.slowSqlList
+      try {
+        const promises = this.selectedInstanceIds.map(id =>
+          collectMetrics(id).then(res => ({ id, data: res.data })).catch(error => ({ id, data: null, error }))
+        )
+        const results = await Promise.all(promises)
+        results.forEach(({ id, data, error }) => {
+          if (data) {
+            this.metricsCache[id] = data
+            // 收集慢SQL
+            if (data.extraJson && data.extraJson.slowSqlList) {
+              this.slowSqlData = data.extraJson.slowSqlList
+            }
+          } else {
+            this.metricsCache[id] = {
+              isAlive: false,
+              connections: 0,
+              maxConnections: 0,
+              slowQueries: 0,
+              qps: 0,
+              cacheHitRatio: 0,
+              extraJson: { error: (error && (error.msg || error.message)) || '采集接口请求失败' }
+            }
           }
-        } else {
-          this.metricsCache[id] = { isAlive: false, connections: 0, maxConnections: 0, slowQueries: 0, qps: 0, cacheHitRatio: 0 }
+        })
+        this.metricsCache = { ...this.metricsCache }
+        // 添加到历史数据用于趋势图
+        const ts = now.toISOString()
+        if (!this.historyData['_all']) this.historyData['_all'] = []
+        this.historyData['_all'].push({
+          time: ts,
+          connections: this.summary.connections,
+          qps: this.summary.qps
+        })
+        if (this.historyData['_all'].length > 60) {
+          this.historyData['_all'] = this.historyData['_all'].slice(-60)
         }
-      })
-      this.metricsCache = { ...this.metricsCache }
-      // 添加到历史数据用于趋势图
-      const ts = now.toISOString()
-      if (!this.historyData['_all']) this.historyData['_all'] = []
-      this.historyData['_all'].push({
-        time: ts,
-        connections: this.summary.connections,
-        qps: this.summary.qps
-      })
-      if (this.historyData['_all'].length > 60) {
-        this.historyData['_all'] = this.historyData['_all'].slice(-60)
+        this.$nextTick(() => {
+          this.initConnChart()
+          this.initQpsChart()
+        })
+      } finally {
+        this.slowSqlLoading = false
+        this.refreshing = false
       }
-      this.$nextTick(() => {
-        this.initConnChart()
-        this.initQpsChart()
-      })
-      this.slowSqlLoading = false
     },
     /** 切换自动刷新 */
     toggleAutoRefresh(val) {
@@ -415,6 +471,18 @@ export default {
       if (pct > 80) return 'bar-danger'
       if (pct > 60) return 'bar-warning'
       return 'bar-normal'
+    },
+    formatSeconds(value) {
+      const num = Number(value || 0)
+      return Number.isFinite(num) ? num.toFixed(2) : '0.00'
+    },
+    formatSqlSummary(sqlText) {
+      const normalized = (sqlText || '').replace(/\s+/g, ' ').trim()
+      return normalized.length > 120 ? normalized.substring(0, 120) + '...' : normalized
+    },
+    showFullSql(sqlText) {
+      this.currentSqlText = sqlText || ''
+      this.sqlDialogOpen = true
     },
     healthTagType(row) {
       if (!row.isAlive) return 'danger'
@@ -479,6 +547,19 @@ export default {
     margin-bottom: 16px;
     .chart-card .chart-box { width: 100%; height: 300px; }
     .chart-header { font-size: 15px; font-weight: 600; color: #303133; }
+  }
+
+  .metric-warning {
+    margin-bottom: 16px;
+  }
+
+  .sql-detail-btn {
+    margin-left: 8px;
+  }
+
+  .sql-full-text ::v-deep textarea {
+    font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+    line-height: 1.5;
   }
 
   .table-card {

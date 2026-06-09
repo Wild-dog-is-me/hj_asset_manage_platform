@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -114,34 +115,49 @@ public class DbInstanceServiceImpl extends ServiceImpl<DbInstanceMapper, DbInsta
     }
 
     @Override
-    public boolean testConnection(DbInstance dbInstance)
+    public String testConnection(DbInstance dbInstance)
     {
-        // 如果是测试已有实例（传了instanceId），需要从数据库加载完整信息
-        if (dbInstance.getInstanceId() != null)
-        {
-            DbInstance exist = getById(dbInstance.getInstanceId());
-            if (exist != null)
-            {
-                dbInstance = exist;
-            }
-        }
-        // 如果是测试新建表单，passwordRaw 已有明文
-        if (StringUtils.isEmpty(dbInstance.getPassword()) && StringUtils.isNotEmpty(dbInstance.getPasswordRaw()))
-        {
-            // 直接用明文
-        }
-        else if (StringUtils.isNotEmpty(dbInstance.getPassword()))
-        {
-            dbInstance.setPasswordRaw(decrypt(dbInstance.getPassword()));
-        }
         try
         {
-            metricSnapshotService.collectMetrics(dbInstance);
-            return true;
+            // 如果是测试已有实例（传了instanceId），需要从数据库加载完整信息。
+            if (dbInstance.getInstanceId() != null)
+            {
+                DbInstance exist = getById(dbInstance.getInstanceId());
+                if (exist != null)
+                {
+                    dbInstance = exist;
+                }
+            }
+            // 如果是测试新建表单，passwordRaw 已有明文；测试已有实例时需要先解密密文。
+            if (StringUtils.isEmpty(dbInstance.getPassword()) && StringUtils.isNotEmpty(dbInstance.getPasswordRaw()))
+            {
+                // 直接使用表单明文密码，不做 URL 编码或转义，避免 %, @ 等特殊字符被改变。
+            }
+            else if (StringUtils.isNotEmpty(dbInstance.getPassword()))
+            {
+                dbInstance.setPasswordRaw(decrypt(dbInstance.getPassword()));
+            }
+            Map<String, Object> metrics = metricSnapshotService.collectMetrics(dbInstance);
+            if ("true".equals(String.valueOf(metrics.get("isAlive"))))
+            {
+                return null;
+            }
+            Object extra = metrics.get("extraJson");
+            if (extra instanceof Map)
+            {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> extraMap = (Map<String, Object>) extra;
+                Object error = extraMap.get("error");
+                if (error != null)
+                {
+                    return sanitizeConnectionError(String.valueOf(error));
+                }
+            }
+            return "连接失败，请检查网络、端口、用户名和密码";
         }
         catch (Exception e)
         {
-            return false;
+            return sanitizeConnectionError(e.getMessage());
         }
     }
 
@@ -181,6 +197,18 @@ public class DbInstanceServiceImpl extends ServiceImpl<DbInstanceMapper, DbInsta
             .orderByAsc(DbInstance::getDbType)
             .orderByDesc(DbInstance::getCreateTime);
         return wrapper;
+    }
+
+    /**
+     * 脱敏连接错误信息，保留认证、网络、权限等关键诊断信息，避免密码等敏感内容透出。
+     */
+    private String sanitizeConnectionError(String message)
+    {
+        if (StringUtils.isEmpty(message))
+        {
+            return "连接失败，请检查网络、端口、用户名和密码";
+        }
+        return message.replaceAll("(?i)(password|pwd)=([^;\\s]+)", "$1=******");
     }
 
     /**

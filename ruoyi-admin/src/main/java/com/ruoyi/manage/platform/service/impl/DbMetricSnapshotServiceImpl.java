@@ -7,10 +7,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -31,6 +31,11 @@ import redis.clients.jedis.Jedis;
 public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMapper, DbMetricSnapshot> implements IDbMetricSnapshotService
 {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /**
+     * SQL Server 性能计数器是累积值，需要保留上次采样点计算区间 QPS。
+     */
+    private static final Map<String, SqlServerCounterSample> SQL_SERVER_QPS_SAMPLES = new ConcurrentHashMap<>();
 
     @Autowired
     private DbMetricSnapshotMapper snapshotMapper;
@@ -326,7 +331,7 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             String url = "jdbc:mysql://" + instance.getHost() + ":" + instance.getPort()
                 + "/" + (StringUtils.isNotEmpty(instance.getDbName()) ? instance.getDbName() : "")
-                + "?useSSL=false&connectTimeout=5000&socketTimeout=30000";
+                + "?useSSL=false&connectTimeout=5000&socketTimeout=130000";
             Class.forName("com.mysql.cj.jdbc.Driver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
@@ -360,6 +365,21 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
 
     // ==================== SQL Server 采集器 ====================
 
+    /**
+     * SQL Server 累积性能计数器采样点。
+     */
+    private static class SqlServerCounterSample
+    {
+        private final long value;
+        private final long timeMillis;
+
+        SqlServerCounterSample(long value, long timeMillis)
+        {
+            this.value = value;
+            this.timeMillis = timeMillis;
+        }
+    }
+
     private static class SqlServerCollector
     {
         Map<String, Object> collect(DbInstance instance)
@@ -367,6 +387,12 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
             Map<String, Object> result = new LinkedHashMap<>();
             Map<String, Object> extra = new LinkedHashMap<>();
             result.put("extraJson", extra);
+            result.put("connections", 0);
+            result.put("maxConnections", 32767);
+            result.put("slowQueries", 0);
+            result.put("qps", BigDecimal.ZERO);
+            result.put("cacheHitRatio", BigDecimal.ZERO);
+            result.put("memoryUsedPct", BigDecimal.ZERO);
 
             try (Connection conn = getSqlServerConnection(instance))
             {
@@ -387,52 +413,58 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
                     if (rs.next()) result.put("connections", rs.getInt(1));
                     rs.close();
                 }
-                result.put("maxConnections", 0); // SQL Server默认32767
-
-                // 慢查询（从查询计划缓存取TOP耗时SQL）
-                List<Map<String, Object>> slowSqlList = new ArrayList<>();
-                try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT TOP 20 TOTAL_ELAPSED_TIME/1000000 AS total_sec, EXECUTION_COUNT, " +
-                    "TOTAL_ELAPSED_TIME/EXECUTION_COUNT/1000000 AS avg_sec, TOTAL_LOGICAL_READS, " +
-                    "TEXT AS sql_text FROM sys.dm_exec_query_stats CROSS APPLY sys.dm_exec_sql_text(sql_handle) " +
-                    "ORDER BY TOTAL_ELAPSED_TIME/EXECUTION_COUNT DESC"))
+                // 最大连接数，SQL Server 默认上限为 32767；显式配置时从 sys.configurations 读取，读取失败时保留默认值。
+                result.put("maxConnections", 32767);
+                try (PreparedStatement ps = conn.prepareStatement("SELECT CAST(value_in_use AS int) FROM sys.configurations WHERE name = 'user connections'"))
                 {
                     ResultSet rs = ps.executeQuery();
-                    while (rs.next())
+                    if (rs.next() && rs.getInt(1) > 0) result.put("maxConnections", rs.getInt(1));
+                    rs.close();
+                }
+                catch (Exception e) { extra.put("maxConnectionsError", e.getMessage()); }
+
+                // QPS：SQL Server 的 Batch Requests/sec 是累积性能计数器，需要用相邻两次采样差值计算区间每秒请求数。
+                try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT cntr_value FROM sys.dm_os_performance_counters " +
+                    "WHERE counter_name = 'Batch Requests/sec' AND object_name LIKE '%SQL Statistics%'"))
+                {
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next())
                     {
-                        Map<String, Object> row = new LinkedHashMap<>();
-                        row.put("sqlText", rs.getString("sql_text"));
-                        row.put("execCount", rs.getLong("EXECUTION_COUNT"));
-                        row.put("avgSec", rs.getBigDecimal("avg_sec"));
-                        row.put("totalSec", rs.getBigDecimal("total_sec"));
-                        row.put("logicalReads", rs.getLong("TOTAL_LOGICAL_READS"));
-                        slowSqlList.add(row);
+                        long counterValue = rs.getLong(1);
+                        result.put("qps", calculateSqlServerQps(instance, counterValue));
                     }
                     rs.close();
                 }
-                catch (Exception ignored) {}
-                result.put("slowQueries", slowSqlList.size());
-                extra.put("slowSqlList", slowSqlList);
+                catch (Exception e) { result.put("qps", BigDecimal.ZERO); extra.put("qpsError", e.getMessage()); }
 
-                // QPS: 批处理请求/秒
+                // SQL Server 缓存命中率由分子和 base 共同计算，直接读取单个计数器会得到错误比例。
                 try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Batch Requests/sec' AND object_name LIKE '%SQL Statistics%'"))
+                    "SELECT counter_name, cntr_value FROM sys.dm_os_performance_counters " +
+                    "WHERE counter_name IN ('Buffer cache hit ratio', 'Buffer cache hit ratio base') " +
+                    "AND object_name LIKE '%Buffer Manager%'"))
                 {
                     ResultSet rs = ps.executeQuery();
-                    if (rs.next()) result.put("qps", rs.getBigDecimal(1));
+                    BigDecimal hitRatio = BigDecimal.ZERO;
+                    BigDecimal hitRatioBase = BigDecimal.ZERO;
+                    while (rs.next())
+                    {
+                        if ("Buffer cache hit ratio".equals(rs.getString("counter_name"))) hitRatio = rs.getBigDecimal("cntr_value");
+                        if ("Buffer cache hit ratio base".equals(rs.getString("counter_name"))) hitRatioBase = rs.getBigDecimal("cntr_value");
+                    }
+                    if (hitRatioBase.compareTo(BigDecimal.ZERO) > 0)
+                    {
+                        result.put("cacheHitRatio", hitRatio.multiply(new BigDecimal(100)).divide(hitRatioBase, 2, java.math.RoundingMode.HALF_UP));
+                    }
+                    else
+                    {
+                        result.put("cacheHitRatio", BigDecimal.ZERO);
+                    }
                     rs.close();
                 }
-                catch (Exception ignored) { result.put("qps", BigDecimal.ZERO); }
+                catch (Exception e) { result.put("cacheHitRatio", BigDecimal.ZERO); extra.put("cacheHitRatioError", e.getMessage()); }
 
-                // Buffer Cache Hit Ratio
-                try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Buffer cache hit ratio' AND object_name LIKE '%Buffer Manager%'"))
-                {
-                    ResultSet rs = ps.executeQuery();
-                    if (rs.next()) result.put("cacheHitRatio", rs.getBigDecimal(1));
-                    rs.close();
-                }
-                catch (Exception ignored) { result.put("cacheHitRatio", BigDecimal.ZERO); }
+                collectSqlServerSlowSql(instance, result, extra);
 
                 result.put("memoryUsedPct", BigDecimal.ZERO);
 
@@ -493,11 +525,78 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
             return result;
         }
 
+        /**
+         * 慢 SQL 采集使用独立连接，避免计划缓存查询超时后关闭主监控连接。
+         */
+        private void collectSqlServerSlowSql(DbInstance instance, Map<String, Object> result, Map<String, Object> extra)
+        {
+            List<Map<String, Object>> slowSqlList = new ArrayList<>();
+            try (Connection slowConn = getSqlServerConnection(instance, 5, 5000);
+                 PreparedStatement ps = slowConn.prepareStatement(
+                     "SELECT TOP 20 total_elapsed_time / 1000000.0 AS total_sec, execution_count, " +
+                     "CASE WHEN execution_count > 0 THEN total_elapsed_time * 1.0 / execution_count / 1000000 ELSE 0 END AS avg_sec, " +
+                     "total_logical_reads, CONVERT(NVARCHAR(MAX), text) AS sql_text " +
+                     "FROM sys.dm_exec_query_stats CROSS APPLY sys.dm_exec_sql_text(sql_handle) " +
+                     "WHERE execution_count > 0 ORDER BY total_elapsed_time * 1.0 / execution_count DESC"))
+            {
+                ps.setQueryTimeout(2);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next())
+                {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("sqlText", rs.getString("sql_text"));
+                    row.put("execCount", rs.getLong("execution_count"));
+                    row.put("avgSec", rs.getBigDecimal("avg_sec"));
+                    row.put("totalSec", rs.getBigDecimal("total_sec"));
+                    row.put("logicalReads", rs.getLong("total_logical_reads"));
+                    slowSqlList.add(row);
+                }
+                rs.close();
+            }
+            catch (Exception e)
+            {
+                extra.put("slowSqlError", e.getMessage());
+            }
+            result.put("slowQueries", slowSqlList.size());
+            extra.put("slowSqlList", slowSqlList);
+        }
+
+        /**
+         * 根据 SQL Server 累积批处理请求计数器计算本次采样周期 QPS。
+         */
+        private BigDecimal calculateSqlServerQps(DbInstance instance, long currentValue)
+        {
+            String sampleKey = instance.getHost() + ":" + instance.getPort() + ":" + instance.getDbName();
+            long now = System.currentTimeMillis();
+            SqlServerCounterSample previous = SQL_SERVER_QPS_SAMPLES.put(sampleKey, new SqlServerCounterSample(currentValue, now));
+            if (previous == null || now <= previous.timeMillis || currentValue < previous.value)
+            {
+                return BigDecimal.ZERO;
+            }
+            long elapsedMillis = now - previous.timeMillis;
+            if (elapsedMillis <= 0)
+            {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(currentValue - previous.value)
+                .multiply(BigDecimal.valueOf(1000))
+                .divide(BigDecimal.valueOf(elapsedMillis), 2, java.math.RoundingMode.HALF_UP);
+        }
+
         private Connection getSqlServerConnection(DbInstance instance) throws Exception
+        {
+            return getSqlServerConnection(instance, 5, 30000);
+        }
+
+        /**
+         * 创建 SQL Server 监控连接，可按采集项设置不同超时。socketTimeout 使用 JDBC 驱动要求的毫秒单位。
+         */
+        private Connection getSqlServerConnection(DbInstance instance, int loginTimeoutSeconds, int socketTimeoutMillis) throws Exception
         {
             String url = "jdbc:sqlserver://" + instance.getHost() + ":" + instance.getPort()
                 + (StringUtils.isNotEmpty(instance.getDbName()) ? ";databaseName=" + instance.getDbName() : "")
-                + ";encrypt=false;loginTimeout=5;socketTimeout=30";
+                + ";encrypt=false;trustServerCertificate=true;loginTimeout=" + loginTimeoutSeconds
+                + ";socketTimeout=" + socketTimeoutMillis + ";applicationName=RuoYiDbMonitor";
             Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
@@ -650,7 +749,7 @@ public class DbMetricSnapshotServiceImpl extends ServiceImpl<DbMetricSnapshotMap
         {
             String url = "jdbc:postgresql://" + instance.getHost() + ":" + instance.getPort()
                 + "/" + (StringUtils.isNotEmpty(instance.getDbName()) ? instance.getDbName() : "postgres")
-                + "?connectTimeout=5&socketTimeout=30";
+                + "?connectTimeout=5&socketTimeout=300";
             Class.forName("org.postgresql.Driver");
             return DriverManager.getConnection(url, instance.getUsername(),
                 StringUtils.isNotEmpty(instance.getPasswordRaw()) ? instance.getPasswordRaw() : instance.getPassword());
